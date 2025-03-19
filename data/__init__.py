@@ -19,11 +19,12 @@ from torch.utils.data import RandomSampler, SequentialSampler, DataLoader
 
 from utils.utils import is_distributed
 from .mot_dataset import build as build_mot_dataset
+from .mot_dataset_hsmot import build as build_mot_dataset_hsmot
 from .utils import collate_fn
 
 
 def build_dataset(config: dict):
-    return build_mot_dataset(config=config)
+    return build_mot_dataset_hsmot(config=config)
 
 
 def build_sampler(dataset, shuffle: bool):

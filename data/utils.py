@@ -4,13 +4,15 @@ from utils.nested_tensor import NestedTensor, tensor_list_to_nested_tensor
 def collate_fn(batch):
     collated_batch = {
         "images": [],
-        "infos": []
+        "infos": [],
+        "img_metas": []
     }
     for data in batch:
         # collated_batch["images"].append(data["images"])
         collated_batch["images"].append(data["images"])
         # collated_batch["infos"].append(data["infos"])
         collated_batch["infos"].append(data["infos"])
+        collated_batch["img_metas"].append(data["img_metas"])
     collated_batch["nested_tensors"] = tensor_list_to_nested_tensor([_ for seq in collated_batch["images"] for _ in seq])
     shape = collated_batch["nested_tensors"].tensors.shape
     b = len(batch)

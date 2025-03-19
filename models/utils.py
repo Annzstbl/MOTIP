@@ -73,7 +73,7 @@ def load_checkpoint(model: nn.Module, path: str, states: dict = None,
     if states is not None:
         states.update(load_state["states"])
     return
-
+    
 
 def load_detr_pretrain(model: nn.Module, pretrain_path: str, num_classes: int):
     pretrain_model = torch.load(pretrain_path, map_location=lambda storage, loc: storage)
@@ -88,6 +88,8 @@ def load_detr_pretrain(model: nn.Module, pretrain_path: str, num_classes: int):
             if len(detr_state_dict[k]) == 91:   # Pretrained in coco:
                 if num_classes == 1:            # People
                     detr_state_dict[k] = detr_state_dict[k][1:2]
+                elif num_classes == 8 :
+                    detr_state_dict[k] = detr_state_dict[k][1:9]
                 else:
                     print(">>>> Because the num_classes is not 1, we do not use the pretrained class head.")
                     detr_state_dict[k] = model_state_dict[k]
@@ -116,8 +118,26 @@ def load_detr_pretrain(model: nn.Module, pretrain_path: str, num_classes: int):
                 else:
                     raise NotImplementedError(f"Do not implement the pretrain loading processing for num_classes={num_classes}")
                     pass
+        # for bbox_embed:
+        if "bbox_embed" in k:
+            if len(detr_state_dict[k]) != len(model_state_dict[k]):
+                # missmatch for model need 5 out_ch
+                if 'weight' in k:
+                    model_state_dict[k][:4, :] = detr_state_dict[k]
+                    detr_state_dict[k] = model_state_dict[k]
+                elif 'bias' in k:
+                    model_state_dict[k][:4] = detr_state_dict[k]
+                    detr_state_dict[k] = model_state_dict[k]
+                else:
+                    raise NotImplementedError(f"some thing wrong with the bbox_embed.")
     for k, v in detr_state_dict.items():
         assert k in model_state_dict, f"DETR parameter key '{k}' should in the model."
-        model_state_dict[k] = v
-    model.load_state_dict(state_dict=model_state_dict, strict=True)
+        # model_state_dict[k] = v
+
+    # 检查所有不匹配的参数 
+    for k, v in detr_state_dict.items():
+        if v.shape != model_state_dict[k].shape:
+            print(f"Skip loading parameter {k}, required shape {model_state_dict[k].shape}, loaded shape {v.shape}.")
+            
+    model.load_state_dict(state_dict=model_state_dict, strict=False)
     return

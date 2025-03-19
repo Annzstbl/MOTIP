@@ -282,12 +282,12 @@ def detr_outputs_index_select(detr_outputs, index, dim: int = 0):
 
 
 def infos_to_detr_targets(infos: dict, device):
+    keys = ['boxes', 'norm_boxes', 'labels', 'obj_ids']
     targets = list()
     for info in infos:
         for _ in range(len(info)):
             targets.append({
-                "boxes": info[_]["boxes"].to(device),
-                "labels": info[_]["labels"].to(device)
+                key: info[_][key].to(device) for key in keys
             })
     return targets
 

@@ -19,6 +19,7 @@ from log.logger import Logger
 from utils.utils import yaml_to_dict, is_distributed, distributed_rank, distributed_world_size
 from models import build_model
 from models.utils import load_checkpoint
+from hsmot.datasets.pipelines.channel import rotate_norm_boxes_to_boxes
 
 
 def submit(config: dict, logger: Logger):
@@ -82,7 +83,7 @@ def submit_one_epoch(config: dict, model: nn.Module,
         for seq in seq_names:
             submit_one_seq(
                 model=model, dataset=dataset,
-                seq_dir=os.path.join(config["DATA_ROOT"], dataset, data_split, seq),
+                seq_dir=os.path.join(config["DATA_ROOT"], dataset, data_split, 'npy', seq),
                 only_detr=only_detr, max_temporal_length=config["MAX_TEMPORAL_LENGTH"],
                 outputs_dir=outputs_dir,
                 det_thresh=config["DET_THRESH"],
@@ -159,13 +160,21 @@ def submit_one_seq(
         detr_det_labels = detr_det_labels[area_legal_idxs]
 
         # De-normalize to target image size:
-        box_results = detr_det_boxes.cpu() * torch.tensor([ori_w, ori_h, ori_w, ori_h])
-        box_results = box_cxcywh_to_xyxy(boxes=box_results)
+        # box_results = detr_det_boxes.cpu() * torch.tensor([ori_w, ori_h, ori_w, ori_h])
+        # box_results = box_cxcywh_to_xyxy(boxes=box_results)
+        box_results = rotate_norm_boxes_to_boxes(detr_det_boxes.cpu(), (ori_h, ori_w), version='le135')
 
         if only_detr is False:
             if len(box_results) > get_model(model).num_id_vocabulary:
                 print(f"[Carefully!] we only support {get_model(model).num_id_vocabulary} ids, "
                       f"but get {len(box_results)} detections in seq {seq_name.split('/')[-1]} {i+1}th frame.")
+                # 随机删除一些
+                random_filter = torch.randperm(len(box_results))[:get_model(model).num_id_vocabulary]
+                box_results = box_results[random_filter]
+                detr_det_outputs = detr_det_outputs[random_filter]
+                detr_det_logits = detr_det_logits[random_filter]
+                detr_det_labels = detr_det_labels[random_filter]
+                
 
         # Decoding the current objects' IDs
         if only_detr is False:
@@ -176,7 +185,7 @@ def submit_one_seq(
             current_tracks.outputs = detr_det_outputs
             current_tracks.ids = torch.tensor([get_model(model).num_id_vocabulary] * len(current_tracks),
                                               dtype=torch.long, device=current_tracks.outputs.device)
-            current_tracks.confs = detr_det_logits.sigmoid()
+            current_tracks.confs = torch.max(detr_det_logits, dim=-1).values.sigmoid()
             trajectory_history.append(current_tracks)
             if len(trajectory_history) == 1:    # first frame, do not need decoding:
                 newborn_filter = (trajectory_history[0].confs > newborn_thresh).reshape(-1, )   # filter by newborn
@@ -216,22 +225,24 @@ def submit_one_seq(
 
         # Output to tracker file:
         if fake_submit is False:
+            pass
             # Write the outputs to the tracker file:
-            result_file_path = os.path.join(outputs_dir, "tracker", f"{seq_name}.txt")
-            with open(result_file_path, "a") as file:
-                assert len(id_results) == len(box_results), f"Boxes and IDs should in the same length, " \
-                                                            f"but get len(IDs)={len(id_results)} and " \
-                                                            f"len(Boxes)={len(box_results)}"
-                for obj_id, box in zip(id_results, box_results):
-                    obj_id = int(obj_id.item())
-                    x1, y1, x2, y2 = box.tolist()
-                    if dataset in ["DanceTrack", "MOT17", "SportsMOT", "MOT17_SPLIT", "MOT15", "MOT15_V2"]:
-                        result_line = f"{i + 1}," \
-                                      f"{obj_id}," \
-                                      f"{x1},{y1},{x2 - x1},{y2 - y1},1,-1,-1,-1\n"
-                    else:
-                        raise NotImplementedError(f"Do not know the outputs format of dataset '{dataset}'.")
-                    file.write(result_line)
+            # TODO 修改
+            # result_file_path = os.path.join(outputs_dir, "tracker", f"{seq_name}.txt")
+            # with open(result_file_path, "a") as file:
+            #     assert len(id_results) == len(box_results), f"Boxes and IDs should in the same length, " \
+            #                                                 f"but get len(IDs)={len(id_results)} and " \
+            #                                                 f"len(Boxes)={len(box_results)}"
+            #     for obj_id, box in zip(id_results, box_results):
+            #         obj_id = int(obj_id.item())
+            #         x1, y1, x2, y2 = box.tolist()
+            #         if dataset in ["DanceTrack", "MOT17", "SportsMOT", "MOT17_SPLIT", "MOT15", "MOT15_V2"]:
+            #             result_line = f"{i + 1}," \
+            #                           f"{obj_id}," \
+            #                           f"{x1},{y1},{x2 - x1},{y2 - y1},1,-1,-1,-1\n"
+            #         else:
+            #             raise NotImplementedError(f"Do not know the outputs format of dataset '{dataset}'.")
+            #         file.write(result_line)
     if fake_submit:
         print(f"[Fake] Finish >> Submit seq {seq_name.split('/')[-1]}. ")
     else:
@@ -242,6 +253,9 @@ def submit_one_seq(
 def get_seq_names(data_root: str, dataset: str, data_split: str):
     if dataset in ["DanceTrack", "SportsMOT", "MOT17", "MOT17_SPLIT"]:
         dataset_dir = os.path.join(data_root, dataset, data_split)
+        return sorted(os.listdir(dataset_dir))
+    elif dataset in ['hsmot_8ch']:
+        dataset_dir = os.path.join(data_root, 'HSMOT', data_split, 'npy')
         return sorted(os.listdir(dataset_dir))
     else:
         raise NotImplementedError(f"Do not support dataset '{dataset}' for eval dataset.")

@@ -15,6 +15,7 @@ from scipy.optimize import linear_sum_assignment
 from torch import nn
 
 from utils.box_ops import box_cxcywh_to_xyxy, generalized_box_iou
+from hsmot.util.dist import l1_dist_rotate, box_iou_rotated_norm_bboxes1
 
 
 class HungarianMatcher(nn.Module):
@@ -42,7 +43,7 @@ class HungarianMatcher(nn.Module):
         self.cost_giou = cost_giou
         assert cost_class != 0 or cost_bbox != 0 or cost_giou != 0, "all costs cant be 0"
 
-    def forward(self, outputs, targets):
+    def forward(self, outputs, targets, img_metas): #=None):
         """ Performs the matching
 
         Params:
@@ -72,6 +73,7 @@ class HungarianMatcher(nn.Module):
             # Also concat the target labels and boxes
             tgt_ids = torch.cat([v["labels"] for v in targets])
             tgt_bbox = torch.cat([v["boxes"] for v in targets])
+            norm_tgt_bbox = torch.cat([v["norm_boxes"] for v in targets])
 
             # Compute the classification cost.
             alpha = 0.25
@@ -81,12 +83,14 @@ class HungarianMatcher(nn.Module):
             cost_class = pos_cost_class[:, tgt_ids] - neg_cost_class[:, tgt_ids]
 
             # Compute the L1 cost between boxes
-            cost_bbox = torch.cdist(out_bbox, tgt_bbox, p=1)
-
+            # cost_bbox = torch.cdist(out_bbox, tgt_bbox, p=1)
+            cost_bbox = l1_dist_rotate(out_bbox, norm_tgt_bbox, aligned=False)
+            
             # Compute the giou cost betwen boxes
-            cost_giou = -generalized_box_iou(box_cxcywh_to_xyxy(out_bbox),
-                                             box_cxcywh_to_xyxy(tgt_bbox))
-
+            # cost_giou = -generalized_box_iou(box_cxcywh_to_xyxy(out_bbox),
+            #                                  box_cxcywh_to_xyxy(tgt_bbox))
+            cost_giou = -box_iou_rotated_norm_bboxes1(out_bbox, tgt_bbox, img_shape=img_metas['img_shape'], version = img_metas['version'])
+            
             # Final cost matrix
             C = self.cost_bbox * cost_bbox + self.cost_class * cost_class + self.cost_giou * cost_giou
             C = C.view(bs, num_queries, -1).cpu()

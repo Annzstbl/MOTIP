@@ -14,6 +14,7 @@ from .trajectory_modeling import TrajectoryAugmentation
 from .id_decoder import IDDecoder
 from .ffn import FFN
 from utils.box_ops import box_cxcywh_to_xyxy, generalized_box_iou
+import copy
 
 # import configs.runtime as runtime
 
@@ -221,11 +222,11 @@ class SeqDecoder(nn.Module):
             trajectory_masks_list.append(t_token_mask)
         # Stack the historical trajectory fields into tensors,
         # shape=(N, T-1, ...)
-        trajectory_features = torch.stack(trajectory_features_list, dim=1)
-        trajectory_boxes = torch.stack(trajectory_boxes_list, dim=1)
+        trajectory_features = torch.stack(trajectory_features_list, dim=1) # (N, T-1, feature_dim)
+        trajectory_boxes = torch.stack(trajectory_boxes_list, dim=1) # 
         trajectory_times = torch.stack(trajectory_times_list, dim=1)
         trajectory_ids = torch.stack(trajectory_ids_list, dim=1)
-        trajectory_masks = torch.stack(trajectory_masks_list, dim=1)
+        trajectory_masks = torch.stack(trajectory_masks_list, dim=1) # (N, T-1) False指明有用 True指明无用
 
         # Prepare the current detection fields,
         # they have nearly the same attributes as historical trajectories.
@@ -348,7 +349,7 @@ class SeqDecoder(nn.Module):
         return [{
             "trajectory": {
                 "features": trajectory_features,
-                "boxes": trajectory_boxes,
+                # "boxes": trajectory_boxes,
                 "ids": trajectory_ids,
                 "times": trajectory_times,
                 "masks": trajectory_masks,
@@ -356,7 +357,7 @@ class SeqDecoder(nn.Module):
             },
             "unknown": {
                 "features": unknown_features,
-                "boxes": unknown_boxes,
+                # "boxes": unknown_boxes,
                 "ids": unknown_ids,
                 "times": unknown_times,
                 "masks": unknown_masks,
@@ -385,6 +386,7 @@ class SeqDecoder(nn.Module):
         )
 
         # Decoding the ID from the trajectory and current detections:
+        # print("trajectory_feature_embeds.shape:", trajectory_feature_embeds.shape)
         id_words = self.id_decoder(
             trajectory_feature_embeds=trajectory_feature_embeds,
             trajectory_masks=format_seq["trajectory"]["masks"],

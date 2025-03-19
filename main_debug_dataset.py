@@ -9,7 +9,30 @@ from configs.utils import update_config, load_super_config
 from train_engine import train
 from eval_engine import evaluate
 from submit_engine import submit
-import cv2
+import os
+import torch
+import wandb
+import torch.nn as nn
+import torch.distributed
+
+from einops import rearrange
+from structures.instances import Instances
+from torch.utils.data import DataLoader
+from models import build_model
+from models.motip import MOTIP
+from models.utils import save_checkpoint, load_checkpoint, load_detr_pretrain, get_model
+from models.criterion import build as build_id_criterion
+from data import build_dataset, build_sampler, build_dataloader
+from utils.utils import labels_to_one_hot, is_distributed, distributed_rank, \
+    combine_detr_outputs, detr_outputs_index_select, infos_to_detr_targets, batch_iterator, is_main_process
+from utils.nested_tensor import nested_tensor_index_select
+from torch.optim import AdamW
+from torch.optim.lr_scheduler import MultiStepLR
+from log.logger import Logger, ProgressLogger
+from log.log import Metrics, TPS
+from eval_engine import evaluate_one_epoch
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.checkpoint import checkpoint
 
 
 def parse_option():
@@ -137,6 +160,8 @@ def main(config: dict):
     # if `--outputs-dir` is None, it will be set to `./outputs/[exp_name]/`.
     if config["OUTPUTS_DIR"] is None:
         config["OUTPUTS_DIR"] = os.path.join("./outputs", config["EXP_NAME"])
+    else:
+        config["OUTPUTS_DIR"] = os.path.join(config["OUTPUTS_DIR"], config["EXP_NAME"])
 
     if config["MODE"] == "train":
         log_dir = os.path.join(config["OUTPUTS_DIR"], config["MODE"])
@@ -171,17 +196,46 @@ def main(config: dict):
     if "NUM_CPU_PER_GPU" in config and config["NUM_CPU_PER_GPU"] is not None:
         torch.set_num_threads(config["NUM_CPU_PER_GPU"])
 
-    # set multispectra
-    if "INPUT_CHANNELS" not in config:
-        config['INPUT_CHANNELS'] = 3
-    
-    if config["MODE"] == "train":
-        train(config=config, logger=logger)
-    elif config["MODE"] == "eval":
-        evaluate(config=config, logger=logger)
-    elif config["MODE"] == "submit":
-        submit(config=config, logger=logger)
+    # if config["MODE"] == "train":
+        # train(config=config, logger=logger)
+    # elif config["MODE"] == "eval":
+    #     evaluate(config=config, logger=logger)
+    #     # elif config["MODE"] == "submit":
+    #     submit(config=config, logger=logger)
+       
+
+    # Dataset:
+    dataset_train = build_dataset(config=config)
+    # Train States:
+    train_states = {
+        "start_epoch": 0,
+        "global_iter": 0
+    }
+
+    for epoch in range(train_states["start_epoch"], config["EPOCHS"]):
+        epoch_start_timestamp = TPS.timestamp()
+        dataset_train.set_epoch(epoch)
+        sampler_train = build_sampler(dataset=dataset_train, shuffle=True)
+        dataloader_train = build_dataloader(
+            dataset=dataset_train,
+            sampler=sampler_train,
+            batch_size=config["BATCH_SIZE"],
+            num_workers=config["NUM_WORKERS"]
+        )
+
+        for i, batch in enumerate(dataloader_train):
+            print(f'[iter {i}/{len(dataloader_train)}]')
+            # 检查是否有错误
+            # if any(batch['images'] is None):
+                # print("None in batch")
+            pass
+
+        break
     return
+
+ 
+    return
+
 
 
 if __name__ == '__main__':

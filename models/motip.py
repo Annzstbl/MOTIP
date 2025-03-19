@@ -58,6 +58,8 @@ class MOTIP(nn.Module):
 
         self.only_detr = config["TRAIN_STAGE"] == "only_detr"
 
+        self.input_channels = config["INPUT_CHANNELS"]
+
         # Prepare args for detr
         detr_args = Args()
         detr_args.num_classes = self.num_classes
@@ -88,6 +90,9 @@ class MOTIP(nn.Module):
         detr_args.set_cost_class = self.detr_set_cost_class
         detr_args.set_cost_bbox = self.detr_set_cost_bbox
         detr_args.set_cost_giou = self.detr_set_cost_giou
+        # 多光谱图像 构造backbone时使用
+        detr_args.input_channels = self.input_channels
+
         if self.detr_framework == "Deformable-DETR":
             # DETR model and criterion:
             self.detr, self.detr_criterion, _ = build_deformable_detr(detr_args)
@@ -343,18 +348,23 @@ class MOTIP(nn.Module):
         return pred_id_words, gt_id_words
 
     def add_random_id_words_to_instances(self, instances: list[Instances]):
+        '''
+            instances: list[Instances] 长度与SAMPLE_LENGTH一致, 每个元素是Instances对象保存该帧中所有的id gt_boxes pred_boxes outputs(features of proposals)
+        '''
         # assert len(instances) == 1  # only for bs=1
         ids = torch.cat([instance.ids for instance in instances], dim=0)
         ids_unique = torch.unique(ids)
 
+        # 训练时如果对象数量超过ID词典长度，随机选择ID词典长度个对象
         if len(ids_unique) > self.training_num_id:
+            print(f'warning, the number of objects {len(ids_unique)} exceeds the length of ID dictionary {self.training_num_id}')
             keep_index = torch.randperm(len(ids_unique))[:self.training_num_id]
             ids_unique = ids_unique[keep_index]
             pass
         id_words_unique = torch.randperm(n=self.num_id_vocabulary)[:len(ids_unique)]
         id_to_word = {
             i.item(): w.item() for i, w in zip(ids_unique, id_words_unique)
-        }
+        }# id 和 idword(from id vocabulary)关联
         already_id_set = set()
         for t in range(len(instances)):
             id_words, id_labels = [], []
@@ -367,9 +377,9 @@ class MOTIP(nn.Module):
                     id_labels.append(-1)
                     continue
                 if i in already_id_set:
-                    id_labels.append(id_to_word[i])
+                    id_labels.append(id_to_word[i]) # 第一次出现的 赋id_token
                 else:
-                    id_labels.append(self.num_id_vocabulary)
+                    id_labels.append(self.num_id_vocabulary)# 第二次出现的 赋special token
                     already_id_set.add(i)
             instances[t].id_words = torch.tensor(id_words, dtype=torch.long)
             instances[t].id_labels = torch.tensor(id_labels, dtype=torch.long)

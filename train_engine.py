@@ -135,45 +135,46 @@ def train(config: dict, logger: Logger):
                             scheduler=scheduler,
                             only_detr=config["TRAIN_STAGE"] == "only_detr",
                             )
-            if config["INFERENCE_DATASET"] is not None:
-                if config["TRAIN_STAGE"] == "only_detr":
-                    eval_metrics = evaluate_one_epoch(
-                        config=config,
-                        model=model,
-                        logger=logger,
-                        dataset=config["INFERENCE_DATASET"],
-                        data_split=config["INFERENCE_SPLIT"],
-                        outputs_dir=os.path.join(config["OUTPUTS_DIR"], config["MODE"],
-                                                 "eval_during_train", config["INFERENCE_SPLIT"], f"epoch_{epoch}"),
-                        only_detr=True
-                    )
-                else:
-                    eval_metrics = evaluate_one_epoch(
-                        config=config,
-                        model=model,
-                        logger=logger,
-                        dataset=config["INFERENCE_DATASET"],
-                        data_split=config["INFERENCE_SPLIT"],
-                        outputs_dir=os.path.join(config["OUTPUTS_DIR"], config["MODE"],
-                                                 "eval_during_train", config["INFERENCE_SPLIT"], f"epoch_{epoch}"),
-                        only_detr=False
-                    )
-                eval_metrics.sync()
-                logger.print_metrics(
-                    metrics=eval_metrics,
-                    prompt=f"[Epoch {epoch} Eval] ",
-                    fmt="{global_average:.4f}"
-                )
-                logger.save_metrics(
-                    metrics=eval_metrics,
-                    prompt=f"[Epoch {epoch} Eval] ",
-                    fmt="{global_average:.4f}",
-                    statistic="global_average",
-                    global_step=train_states["global_iter"],
-                    prefix="epoch",
-                    x_axis_step=epoch,
-                    x_axis_name="epoch"
-                )
+            # 不推理
+            # if config["INFERENCE_DATASET"] is not None:
+            #     if config["TRAIN_STAGE"] == "only_detr":
+            #         eval_metrics = evaluate_one_epoch(
+            #             config=config,
+            #             model=model,
+            #             logger=logger,
+            #             dataset=config["INFERENCE_DATASET"],
+            #             data_split=config["INFERENCE_SPLIT"],
+            #             outputs_dir=os.path.join(config["OUTPUTS_DIR"], config["MODE"],
+            #                                      "eval_during_train", config["INFERENCE_SPLIT"], f"epoch_{epoch}"),
+            #             only_detr=True
+            #         )
+            #     else:
+            #         eval_metrics = evaluate_one_epoch(
+            #             config=config,
+            #             model=model,
+            #             logger=logger,
+            #             dataset=config["INFERENCE_DATASET"],
+            #             data_split=config["INFERENCE_SPLIT"],
+            #             outputs_dir=os.path.join(config["OUTPUTS_DIR"], config["MODE"],
+            #                                      "eval_during_train", config["INFERENCE_SPLIT"], f"epoch_{epoch}"),
+            #             only_detr=False
+            #         )
+            #     eval_metrics.sync()
+            #     logger.print_metrics(
+            #         metrics=eval_metrics,
+            #         prompt=f"[Epoch {epoch} Eval] ",
+            #         fmt="{global_average:.4f}"
+            #     )
+            #     logger.save_metrics(
+            #         metrics=eval_metrics,
+            #         prompt=f"[Epoch {epoch} Eval] ",
+            #         fmt="{global_average:.4f}",
+            #         statistic="global_average",
+            #         global_step=train_states["global_iter"],
+            #         prefix="epoch",
+            #         x_axis_step=epoch,
+            #         x_axis_name="epoch"
+            #     )
 
         # Next step.
         scheduler.step()
@@ -274,11 +275,15 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
         else:
             detr_outputs = detr_train_outputs
         detr_outputs = detr_outputs_index_select(detr_outputs, index=argsort_random_frame_idx_repeat.to(device))
+        '''
+            detr_outputs = {'pred_logits', 'pred_bboxes', 'outputs', 'aux_outputs'}
+            分别是 分类头输出结果 box输出结果   feature of proposal   每一个decoder的结果
+        '''
 
         if memory_optimized_detr_criterion or (auto_memory_optimized_detr_criterion and num_gts > 2400):
             train_detr_outputs = detr_outputs_index_select(detr_outputs, index=detr_train_frame_idxs.to(device))
             train_detr_targets = [detr_targets[_] for _ in detr_train_frame_idxs.tolist()]
-            detr_loss_dict, _ = get_model(model).detr_criterion(outputs=train_detr_outputs, targets=train_detr_targets)
+            detr_loss_dict, _ = get_model(model).detr_criterion(outputs=train_detr_outputs, targets=train_detr_targets, img_metas=batch["img_metas"][0][0])
             match_idxs = []
             with torch.no_grad():
                 idxs = torch.arange(0, len(detr_targets), device=device)
@@ -288,7 +293,8 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
                                            k != 'aux_outputs' and k != 'enc_outputs'}
                     m = get_model(model).detr_criterion.matcher(
                         outputs=outputs_without_aux,
-                        targets=[detr_targets[_] for _ in idx.tolist()]
+                        targets=[detr_targets[_] for _ in idx.tolist()],
+                        img_metas=batch["img_metas"][0][0]
                     )
                     match_idxs += m
                     pass
@@ -297,11 +303,11 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
             if checkpoint_detr_criterion:
                 detr_loss_dict, match_idxs = checkpoint(
                     get_model(model).detr_criterion,
-                    detr_outputs, detr_targets,
+                    detr_outputs, detr_targets,img_metas=batch["img_metas"][0][0],
                     use_reentrant=False
                 )
             else:
-                detr_loss_dict, match_idxs = get_model(model).detr_criterion(outputs=detr_outputs, targets=detr_targets)
+                detr_loss_dict, match_idxs = get_model(model).detr_criterion(outputs=detr_outputs, targets=detr_targets, img_metas=batch["img_metas"][0][0])
 
         if config["TRAIN_STAGE"] == "only_detr":    # only train detr part:
             id_loss = None
@@ -313,7 +319,7 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
             assert len(match_instances) == 1, f"For simplicity, only the case of bs=1 is implemented."
             # Generate field 'id_words' for instances:
             get_model(model).add_random_id_words_to_instances(instances=match_instances[0])
-            pred_id_words, gt_id_words = get_model(model).forward_train(
+            pred_id_words, gt_id_words = get_model(model).forward_train(#! 检查是否用到了box
                 track_history=match_instances,
                 traj_drop_ratio=config["TRAJ_DROP_RATIO"],
                 traj_switch_ratio=config["TRAJ_SWITCH_RATIO"] if "TRAJ_SWITCH_RATIO" in config else 0.0,
@@ -365,12 +371,14 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
             metrics.sync()
             logger.print_metrics(
                 metrics=metrics,
-                prompt=f"[Epoch: {epoch}] [{i}/{len(dataloader)}] [tps: {tps.average:.2f}s] [eta: {TPS.format(eta)}] "
+                prompt=f"[Epoch: {epoch}] [{i}/{len(dataloader)}] [tps: {tps.average:.2f}s] [eta: {TPS.format(eta)}] ",
+                fmt="{average:.6f} ({global_average:.4f})"
             )
             logger.save_metrics(
                 metrics=metrics,
                 prompt=f"[Epoch: {epoch}] [{i}/{len(dataloader)}] [tps: {tps.average:.2f}s] ",
                 global_step=states["global_iter"],
+                fmt="{average:.6f} ({global_average:.4f})"
             )
 
         states["global_iter"] += 1
@@ -389,9 +397,10 @@ def generate_match_instances(match_idxs, infos, detr_outputs):
             flat_idx = b * T + t
             output_idxs, info_idxs = match_idxs[flat_idx]
             instances = Instances(image_size=(0, 0))
-            instances.ids = infos[b][t]["ids"][info_idxs]
-            instances.gt_boxes = infos[b][t]["boxes"][info_idxs]
-            instances.pred_boxes = detr_outputs["pred_boxes"][flat_idx][output_idxs]
+            # instances.ids = infos[b][t]["ids"][info_idxs]
+            instances.ids = infos[b][t]["obj_ids"][info_idxs]
+            instances.gt_boxes = infos[b][t]["boxes"][info_idxs]#!注意 非归一化数据
+            instances.pred_boxes = detr_outputs["pred_boxes"][flat_idx][output_idxs]#!注意 归一化数据
             instances.outputs = detr_outputs["outputs"][flat_idx][output_idxs]
             match_instances[b].append(instances)
     return match_instances
