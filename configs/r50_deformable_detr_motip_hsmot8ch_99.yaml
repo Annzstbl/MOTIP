@@ -3,8 +3,8 @@ SUPER_CONFIG_PATH:
 MODE: train      # "train" or "eval" or "submit", for the main.py script.
 
 # System config, like CPU/GPU
-NUM_CPU_PER_GPU:       # number of CPU per GPU
-NUM_WORKERS: 0
+NUM_CPU_PER_GPU: 32      # number of CPU per GPU
+NUM_WORKERS: 2
 DEVICE: cuda
 AVAILABLE_GPUS: '0'
 
@@ -135,4 +135,4 @@ CHECKPOINT_DETR_CRITERION: False # 原参数 False
 ROTATE_VERSION: le135
 
 # Multispectra Parameters
-INPUT_CHANNELS: 3
+INPUT_CHANNELS: 8

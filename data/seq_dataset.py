@@ -9,7 +9,7 @@ from torch.utils.data import Dataset
 
 import numpy as np
 import mmcv
-from mmdet.datasets.pipelines.formating import to_tensor
+from hsmot.mmlab.hs_mmdet import to_tensor
 
 class SeqDataset(Dataset):
     def __init__(self, seq_dir: str, dataset: str, height: int = 900, width: int = 1200):

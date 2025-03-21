@@ -13,11 +13,21 @@ touch ${EXP_DIR}/output.log
 cp $0 ${EXP_DIR}/
 
 
-CUDA_VISIBLE_DEVICES=0,1,2,3 python3 -m torch.distributed.run --nproc_per_node=4 \
-     main.py \
-    --mode train \
-    --use-distributed True \
-    --use-wandb False\
-    --config-path /data/users/wangying01/lth/hsmot/MOTIP/configs/r50_deformable_detr_motip_hsmot8ch_99.yaml \
-    --outputs-dir ${EXP_DIR} \
-    | tee ${EXP_DIR}/output.log
+# LD_LIBRARY_PATH="" CUDA_VISIBLE_DEVICES=0,1, python3 -m torch.distributed.run --nproc_per_node=2 \
+#      main.py \
+#     --mode train \
+#     --use-distributed True \
+#     --use-wandb False\
+#     --config-path /data/users/wangying01/lth/hsmot/MOTIP/configs/r50_deformable_detr_motip_hsmot8ch_99.yaml \
+#     --outputs-dir ${EXP_DIR} \
+#     | tee ${EXP_DIR}/output.log
+
+LD_LIBRARY_PATH="" CUDA_VISIBLE_DEVICES=0,1,2,3 python3 -m torch.distributed.launch --nproc_per_node=1 \
+     --master_port 20011 \
+     --use_env main.py \
+     --mode train \
+     --use-distributed True \
+     --use-wandb False\
+     --config-path /data/users/wangying01/lth/hsmot/MOTIP/configs/r50_deformable_detr_motip_hsmot8ch_99.yaml \
+     --outputs-dir ${EXP_DIR} \
+     | tee ${EXP_DIR}/output.log

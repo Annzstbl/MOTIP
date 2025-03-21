@@ -15,7 +15,14 @@ import pandas as pd
 import pycocotools.mask as mask_util
 import numpy as np
 import glob as gb
-from mmrotate.core import eval_rbbox_map, obb2poly_np, poly2obb_np
+from hsmot.mmlab.hs_mmrotate import obb2poly_np, poly2obb_np
+
+from hsmot.datasets.pipelines.compose import MotCompose, MotRandomChoice
+from hsmot.datasets.pipelines.channel import MotrToMmrotate, MmrotateToMotr, MmrotateToMotip, MotipToMmrotate
+from hsmot.datasets.pipelines.loading import MotLoadAnnotations, MotLoadImageFromFile, MotLoadMultichannelImageFromNpy
+from hsmot.datasets.pipelines.transforms import MotRRsize, MotRRandomFlip, MotRRandomCrop, MotNormalize, MotPad
+from hsmot.datasets.pipelines.formatting import MotCollect, MotDefaultFormatBundle, MotShow
+
 import time
 
 
@@ -428,12 +435,6 @@ class MOTDataset(Dataset):
         mean = [_*255 for _ in mean]
         std = [_*255 for _ in std]
         use_color_jitter_v2 = False if "AUG_COLOR_JITTER_V2" not in config else config["AUG_COLOR_JITTER_V2"]
-
-        from hsmot.datasets.pipelines.compose import MotCompose, MotRandomChoice
-        from hsmot.datasets.pipelines.channel import MotrToMmrotate, MmrotateToMotr, MmrotateToMotip, MotipToMmrotate
-        from hsmot.datasets.pipelines.loading import MotLoadAnnotations, MotLoadImageFromFile, MotLoadMultichannelImageFromNpy
-        from hsmot.datasets.pipelines.transforms import MotRRsize, MotRRandomFlip, MotRRandomCrop, MotNormalize, MotPad
-        from hsmot.datasets.pipelines.formatting import MotCollect, MotDefaultFormatBundle, MotShow
             
         AUG_RESIZE_SCALES_W = config["AUG_RESIZE_SCALES"]
         AUG_RESIZE_SCALES_H = [ int(w/4*3) for w in AUG_RESIZE_SCALES_W]
