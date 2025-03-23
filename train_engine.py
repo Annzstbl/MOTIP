@@ -419,7 +419,8 @@ def get_param_groups(model: nn.Module, config) -> list[dict]:
     _dictionary_scale = 1.0 if "LR_DICTIONARY_SCALE" not in config else config["LR_DICTIONARY_SCALE"]
     param_groups = [
         {
-            "params": [p for n, p in model.named_parameters() if match_names(n, backbone_names) and p.requires_grad],
+            "params": [p for n, p in model.named_parameters() if match_names(n, backbone_names) and p.requires_grad
+            and not match_names(n, dictionary_names)],
             "lr_scale": config["LR_BACKBONE_SCALE"],
             "lr": config["LR"] * config["LR_BACKBONE_SCALE"]
         },
@@ -441,6 +442,12 @@ def get_param_groups(model: nn.Module, config) -> list[dict]:
                        and p.requires_grad],
         }
     ]
+    # 打印 param_groups的所有lr
+    for param_group in param_groups:
+        if "lr" in param_group:
+            print(f'there are {len(param_group["params"])} params with lr {param_group["lr"]}')
+        else :
+            print(f'there are {len(param_group["params"])} params with no lr settings')
     return param_groups
 
 
