@@ -24,7 +24,7 @@ SAMPLE_INTERVALS: [3] # motip is 3
 AUG_RESIZE_SCALES: [608, 640, 672, 704, 736, 768, 800, 832, 864, 896, 928, 960, 992, 1024, 1056, 1088, 1120, 1152, 1184]
 AUG_MAX_SIZE: 1333
 AUG_RANDOM_RESIZE: [400, 500, 600] #unused
-AUG_RANDOM_CROP_MIN: 800
+AUG_RANDOM_CROP_MIN: 600
 AUG_RANDOM_CROP_MAX: 1200
 AUG_OVERFLOW_BBOX: False
 AUG_REVERSE_CLIP: 0.0
@@ -86,6 +86,9 @@ LR_BACKBONE_SCALE: 0.1
 LR_LINEAR_PROJ_NAMES: [reference_points, sampling_offsets]
 LR_LINEAR_PROJ_SCALE: 0.05
 LR_WARMUP_EPOCHS: 1
+LR_DICTIONARY_NAMES: [backbone.0.body.conv1.weight]
+LR_DICTIONARY_SCALE: 1
+
 WEIGHT_DECAY: 0.0005
 CLIP_MAX_NORM: 0.1
 SCHEDULER_TYPE: MultiStep
@@ -99,7 +102,7 @@ RESUME_SCHEDULER: True
 RESUME_STATES: True
 
 # Inference:
-INFERENCE_MODEL: /data3/litianhao/hsmot/motip_99/motip_r50_train_hsmot_8ch_4gpu/checkpoint_13.pth
+INFERENCE_MODEL: /data/users/litianhao/hsmot_code/workdir/motip/motip_hsmot_8ch/checkpoint_0.pth
 INFERENCE_ONLY_DETR: False
 INFERENCE_DATASET: hsmot_8ch
 INFERENCE_SPLIT: test
@@ -114,7 +117,7 @@ NEWBORN_THRESH: 0.6 #0.6
 AREA_THRESH: 5
 
 # Outputs:
-OUTPUTS_DIR: /data3/litianhao/hsmot/motip_99/motip_r50_train_hsmot_8ch_4gpu_debug
+OUTPUTS_DIR: /data3/litianhao/hsmot/motip
 OUTPUTS_PER_STEP: 1
 SAVE_CHECKPOINT_PER_EPOCH: 1
 USE_TENSORBOARD: False

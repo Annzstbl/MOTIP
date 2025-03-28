@@ -101,10 +101,7 @@ class MOTDataset(Dataset):
         
         data_info = self.get_multi_frames_hsmot(dataset=dataset, split=split, seq=seq, frames=frames_idx)
         assert self.transforms != None
-        transform_start_time = time.time()
         results = self.transforms['video'](data_info)
-        transform_end_time = time.time()
-        print(f"Transform time: {transform_end_time - transform_start_time}")
         assert all([len(info["boxes"]) > 0 for info in results[1]])
         return {
             "images": results[0],

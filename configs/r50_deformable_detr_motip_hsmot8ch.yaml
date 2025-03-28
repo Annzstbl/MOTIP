@@ -14,7 +14,7 @@ GIT_VERSION:              # you should input the git version here, if you are us
 # Datasets:
 DATASETS: [hsmot_8ch]    # for joint training, there may be multiple datasets, like: [CrowdHuman, MOT17]
 DATASET_SPLITS: [train]   # and corresponding splits, like: [train, val]
-DATA_ROOT: /data/users/litianhao/data    # datasets root
+DATA_ROOT: /data/users/wangying01/lth/hsmot/data    # datasets root
 # Sampling settings:
 SAMPLE_STEPS: [0]
 SAMPLE_LENGTHS: [20] #! ID vocabulary changes from 50 to 200. So sample lengths need to 4x scale down from 40.
