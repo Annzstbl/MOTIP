@@ -1,0 +1,9 @@
+SUPER_CONFIG_PATH: ./configs/autodl_r50_deformable_detr_motip_hsmot8ch.yaml
+
+OUTPUTS_DIR: /root/hsmot/workdir/motip/joint_10lrconv
+
+#首层10倍(相对于backbone)
+LR_DICTIONARY_NAMES: [backbone.0.body.conv1.weight]
+LR_DICTIONARY_SCALE: 1
+
+DETR_PRETRAIN: ../workdir/motip/pretrain_10lrconv_LoadPretrainRight/checkpoint_19.pth

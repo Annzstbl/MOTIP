@@ -24,6 +24,8 @@ from log.log import Metrics, TPS
 from eval_engine import evaluate_one_epoch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.checkpoint import checkpoint
+from hsmot.datasets.pipelines.channel import rotate_norm_boxes_to_boxes
+from hsmot.datasets.pipelines.formatting import MotShow
 
 
 def train(config: dict, logger: Logger):
@@ -186,7 +188,7 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
                     dataloader: DataLoader, id_criterion: nn.Module,
                     optimizer: torch.optim,
                     epoch: int, states: dict, clip_max_norm: float, detr_num_train_frames: int,
-                    detr_checkpoint_frames: int = 0, lr_warmup_epochs: int = 0):
+                    detr_checkpoint_frames: int = 0, lr_warmup_epochs: int = 0, save_debug_img_interval: int = 100, save_debug_dir = None):
     model.train()
     metrics = Metrics()   # save metrics
     memory_optimized_detr_criterion = config["MEMORY_OPTIMIZED_DETR_CRITERION"]
@@ -194,6 +196,7 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
     auto_memory_optimized_detr_criterion = config["AUTO_MEMORY_OPTIMIZED_DETR_CRITERION"]
 
     tps = TPS()             # save time per step
+    tps_data = TPS()
 
     device = torch.device(config["DEVICE"])
 
@@ -211,6 +214,7 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
             other_params.append(param)
 
     optimizer.zero_grad()   # init optim
+    data_start_timestamp = TPS.timestamp()
     for i, batch in enumerate(dataloader):
         if epoch < lr_warmup_epochs:
             # Do lr warmup:
@@ -309,6 +313,35 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
             else:
                 detr_loss_dict, match_idxs = get_model(model).detr_criterion(outputs=detr_outputs, targets=detr_targets, img_metas=batch["img_metas"][0][0])
 
+        if i % save_debug_img_interval == 0 and save_debug_dir is not None:
+            ## 画图
+            # __box = detr_outputs['pred_boxes'][0]
+            __img = batch['images'][0][0]
+            __info = batch['img_metas'][0][0]
+            __info['filename'] = 'debug.npy'
+            mean = __info['transform_metas'].data['img_norm_cfg']['mean']
+            std = __info['transform_metas'].data['img_norm_cfg']['std']
+            motshow = MotShow(save_path=save_debug_dir, mean =mean, std = std, to_bgr=False, show_proposals=True )
+            
+            detr_pred_boxes = detr_outputs['pred_boxes'][0].detach().cpu()
+            box_results = rotate_norm_boxes_to_boxes(detr_pred_boxes, (__info['img_shape']), version='le135')
+            box_confs = detr_outputs['pred_logits'][0].detach().cpu().sigmoid().max(1).values
+            gts = batch['infos'][0][0]['boxes']
+            match = match_idxs[0]
+
+            box_results = box_results[match[0]]
+            gts = gts[match[1]]
+            box_confs = box_confs[match[0]]
+
+            _result = {
+                'img': __img.permute(1,2,0).detach().cpu().numpy(),
+                'proposals': box_results,
+                'proposal_scores': box_confs,
+                'gt_bboxes': gts,
+                'img_info': __info,
+            }
+            motshow([_result])
+
         if config["TRAIN_STAGE"] == "only_detr":    # only train detr part:
             id_loss = None
         else:
@@ -362,8 +395,10 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
             optimizer.zero_grad()
 
         iter_end_timestamp = TPS.timestamp()
-        tps.update(iter_end_timestamp - iter_start_timestamp)
+        tps.update(iter_end_timestamp - data_start_timestamp)
+        tps_data.update(iter_start_timestamp - data_start_timestamp)
         eta = tps.eta(total_steps=len(dataloader), current_steps=i)
+        data_start_timestamp = TPS.timestamp()
 
         if (i % config["OUTPUTS_PER_STEP"] == 0) or (i == len(dataloader) - 1):
             metrics["learning_rate"].clear()
@@ -371,12 +406,12 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
             metrics.sync()
             logger.print_metrics(
                 metrics=metrics,
-                prompt=f"[Epoch: {epoch}] [{i}/{len(dataloader)}] [tps: {tps.average:.2f}s] [eta: {TPS.format(eta)}] ",
+                prompt=f"[Epoch: {epoch}] [{i}/{len(dataloader)}] [tps: {tps.average:.2f}s] [eta: {TPS.format(eta)}] [tps_data: {tps_data.average:.2f}s] ",
                 fmt="{average:.6f} ({global_average:.4f})"
             )
             logger.save_metrics(
                 metrics=metrics,
-                prompt=f"[Epoch: {epoch}] [{i}/{len(dataloader)}] [tps: {tps.average:.2f}s] ",
+                prompt=f"[Epoch: {epoch}] [{i}/{len(dataloader)}] [tps: {tps.average:.2f}s] [tps_data: {tps_data.average:.2f}s] ",
                 global_step=states["global_iter"],
                 fmt="{average:.6f} ({global_average:.4f})"
             )

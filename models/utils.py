@@ -63,7 +63,7 @@ def load_checkpoint(model: nn.Module, path: str, states: dict = None,
     if is_main_process():
         if "bbox_embed.0.layers.0.weight" in model_state:   # only a detr model from pre-train processing.
             load_detr_pretrain(model=model, pretrain_path=path, num_classes=model.num_classes)
-            return  # normally, do not need to load optimizer et al.
+            # return  # normally, do not need to load optimizer et al. #! 我真的是要恢复训练detr
         else:
             model.load_state_dict(load_state["model"])
     if optimizer is not None:
@@ -139,5 +139,5 @@ def load_detr_pretrain(model: nn.Module, pretrain_path: str, num_classes: int):
         if v.shape != model_state_dict[k].shape:
             print(f"Skip loading parameter {k}, required shape {model_state_dict[k].shape}, loaded shape {v.shape}.")
             
-    model.load_state_dict(state_dict=model_state_dict, strict=False)
+    model.load_state_dict(state_dict=detr_state_dict, strict=False)
     return
