@@ -4,7 +4,7 @@ MODE: train      # "train" or "eval" or "submit", for the main.py script.
 
 # System config, like CPU/GPU
 NUM_CPU_PER_GPU: 16      # number of CPU per GPU
-NUM_WORKERS: 0
+NUM_WORKERS: 2
 DEVICE: cuda
 AVAILABLE_GPUS: '0'
 
