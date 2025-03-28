@@ -61,8 +61,6 @@ class SeqDataset(Dataset):
         image = mmcv.imnormalize(image, self.mean, self.std, to_rgb=False)
         image = np.ascontiguousarray(image.transpose(2, 0, 1))
         image = to_tensor(image)
-        # ! 临时修改
-        image = image[:3, :, :]
 
         # image = image.unsqueeze(0)
         return image, ori_image

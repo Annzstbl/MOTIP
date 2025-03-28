@@ -20,6 +20,8 @@ from utils.utils import yaml_to_dict, is_distributed, distributed_rank, distribu
 from models import build_model
 from models.utils import load_checkpoint
 from hsmot.datasets.pipelines.channel import rotate_norm_boxes_to_boxes
+from hsmot.mmlab.hs_mmrotate import obb2poly
+from tqdm import tqdm
 
 
 def submit(config: dict, logger: Logger):
@@ -44,9 +46,7 @@ def submit(config: dict, logger: Logger):
                                           config["INFERENCE_SPLIT"],
                                           f'{config["INFERENCE_MODEL"].split("/")[-1][:-4]}')
     else:
-        submit_outputs_dir = os.path.join(config["OUTPUTS_DIR"], config["MODE"], "default",
-                                          config["INFERENCE_SPLIT"],
-                                          f'{config["INFERENCE_MODEL"].split("/")[-1][:-4]}')
+        submit_outputs_dir = os.path.join(config["OUTPUTS_DIR"], config["MODE"])
 
     # 需要调度整个 submit 流程
     submit_one_epoch(
@@ -142,7 +142,9 @@ def submit_one_seq(
     else:
         print(f"Start >> Submit seq {seq_name.split('/')[-1]}, {len(seq_dataloader)} frames ......")
 
-    for i, (image, ori_image) in enumerate(seq_dataloader):
+    txt_lines = []
+
+    for i, (image, ori_image) in tqdm(enumerate(seq_dataloader), desc=f"Submit seq {seq_name.split('/')[-1]}"):
         ori_h, ori_w = ori_image.shape[1], ori_image.shape[2]
         frame = tensor_list_to_nested_tensor([image[0]]).to(device)
         detr_outputs = model(frames=frame)
@@ -163,9 +165,15 @@ def submit_one_seq(
         # box_results = detr_det_boxes.cpu() * torch.tensor([ori_w, ori_h, ori_w, ori_h])
         # box_results = box_cxcywh_to_xyxy(boxes=box_results)
         box_results = rotate_norm_boxes_to_boxes(detr_det_boxes.cpu(), (ori_h, ori_w), version='le135')
+        box_results = obb2poly(box_results)
+        label_results = detr_det_labels.cpu()
+        confs = torch.max(detr_det_logits, dim=-1).values.sigmoid().cpu()
+
 
         if only_detr is False:
             if len(box_results) > get_model(model).num_id_vocabulary:
+                raise ValueError(f"[Carefully!] we only support {get_model(model).num_id_vocabulary} ids, "
+                                    f"but get {len(box_results)} detections in seq {seq_name.split('/')[-1]} {i+1}th frame.")
                 print(f"[Carefully!] we only support {get_model(model).num_id_vocabulary} ids, "
                       f"but get {len(box_results)} detections in seq {seq_name.split('/')[-1]} {i+1}th frame.")
                 # 随机删除一些
@@ -190,7 +198,11 @@ def submit_one_seq(
             if len(trajectory_history) == 1:    # first frame, do not need decoding:
                 newborn_filter = (trajectory_history[0].confs > newborn_thresh).reshape(-1, )   # filter by newborn
                 trajectory_history[0] = trajectory_history[0][newborn_filter]
+
                 box_results = box_results[newborn_filter.cpu()]
+                label_results = label_results[newborn_filter.cpu()]
+                confs = confs[newborn_filter.cpu()]
+
                 ids = torch.tensor([current_id + _ for _ in range(len(trajectory_history[-1]))],
                                    dtype=torch.long, device=current_tracks.outputs.device)
                 trajectory_history[-1].ids = ids
@@ -219,33 +231,33 @@ def submit_one_seq(
                 id_results = torch.tensor(id_results, dtype=torch.long)
                 if boxes_keep is not None:
                     box_results = box_results[boxes_keep.cpu()]
+                    label_results = label_results[boxes_keep.cpu()]
+                    confs = confs[boxes_keep.cpu()]
+
         else:   # only detr, ID is just +1 for each detection.
             id_results = torch.tensor([current_id + _ for _ in range(len(box_results))], dtype=torch.long)
             current_id += len(id_results)
 
         # Output to tracker file:
         if fake_submit is False:
-            pass
-            # Write the outputs to the tracker file:
-            # TODO 修改
-            # result_file_path = os.path.join(outputs_dir, "tracker", f"{seq_name}.txt")
-            # with open(result_file_path, "a") as file:
-            #     assert len(id_results) == len(box_results), f"Boxes and IDs should in the same length, " \
-            #                                                 f"but get len(IDs)={len(id_results)} and " \
-            #                                                 f"len(Boxes)={len(box_results)}"
-            #     for obj_id, box in zip(id_results, box_results):
-            #         obj_id = int(obj_id.item())
-            #         x1, y1, x2, y2 = box.tolist()
-            #         if dataset in ["DanceTrack", "MOT17", "SportsMOT", "MOT17_SPLIT", "MOT15", "MOT15_V2"]:
-            #             result_line = f"{i + 1}," \
-            #                           f"{obj_id}," \
-            #                           f"{x1},{y1},{x2 - x1},{y2 - y1},1,-1,-1,-1\n"
-            #         else:
-            #             raise NotImplementedError(f"Do not know the outputs format of dataset '{dataset}'.")
-            #         file.write(result_line)
+            save_format = '{frame:6d},{id:6d},{x1:.3f},{y1:.3f},{x2:.3f},{y2:.3f},{x3:.3f},{y3:.3f},{x4:.3f},{y4:.3f},{conf:.3f},{label:2d},-1\n'
+            assert len(id_results) == len(box_results), f"Boxes and IDs should in the same length, " \
+                                                        f"but get len(IDs)={len(id_results)} and " \
+                                                        f"len(Boxes)={len(box_results)}"
+            for obj_id, box , label, conf in zip(id_results, box_results, label_results, confs):
+                obj_id = int(obj_id.item())
+                x1, y1, x2, y2, x3, y3, x4, y4 = box.tolist()
+                line = save_format.format(
+                    frame=i + 1, id=obj_id, x1=x1, y1=y1, x2=x2, y2=y2, x3=x3, y3=y3, x4=x4, y4=y4, conf=conf, label=label
+                )
+                txt_lines.append(line)
+
     if fake_submit:
         print(f"[Fake] Finish >> Submit seq {seq_name.split('/')[-1]}. ")
     else:
+        result_file_path = os.path.join(outputs_dir, f"{seq_name}.txt")
+        with open(result_file_path, "w") as f:
+            f.writelines(txt_lines)
         print(f"Finish >> Submit seq {seq_name.split('/')[-1]}. ")
     return
 

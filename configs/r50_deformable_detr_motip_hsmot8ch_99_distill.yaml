@@ -64,7 +64,8 @@ DETR_BBOX_LOSS_COEF: 5.0
 DETR_GIOU_LOSS_COEF: 2.0
 DETR_FOCAL_ALPHA: 0.25
 # DETR_PRETRAIN: /data3/litianhao/hsmot/motip/r50_deformable_detr_coco.pth
-DETR_PRETRAIN: /data3/litianhao/hsmot/motr/r50_deformable_detr_plus_iterative_bbox_refinement-checkpoint_8ch_interpolate.pth
+# DETR_PRETRAIN: /data3/litianhao/hsmot/motr/r50_deformable_detr_plus_iterative_bbox_refinement-checkpoint_8ch_interpolate.pth
+DETR_PRETRAIN: /data3/litianhao/hsmot/motr/r50_deformable_detr_plus_iterative_bbox_refinement-checkpoint_8ch_interpolate_distill.pth
 DETR_FRAMEWORK: Deformable-DETR
 
 # Training Setting:
@@ -99,7 +100,7 @@ RESUME_SCHEDULER: True
 RESUME_STATES: True
 
 # Inference:
-INFERENCE_MODEL: /data3/litianhao/hsmot/motip_99/motip_r50_train_hsmot_8ch_4gpu/checkpoint_13.pth
+INFERENCE_MODEL: /data/users/litianhao/hsmot_code/workdir/motip/motip_hsmot_8ch/checkpoint_0.pth
 INFERENCE_ONLY_DETR: False
 INFERENCE_DATASET: hsmot_8ch
 INFERENCE_SPLIT: test
@@ -114,7 +115,7 @@ NEWBORN_THRESH: 0.6 #0.6
 AREA_THRESH: 5
 
 # Outputs:
-OUTPUTS_DIR: /data3/litianhao/hsmot/motip_99/motip_r50_train_hsmot_8ch_4gpu_debug
+OUTPUTS_DIR: /data3/litianhao/hsmot/motip
 OUTPUTS_PER_STEP: 1
 SAVE_CHECKPOINT_PER_EPOCH: 1
 USE_TENSORBOARD: False
