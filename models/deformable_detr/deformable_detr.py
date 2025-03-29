@@ -61,8 +61,20 @@ class DeformableDETR(nn.Module):
         # self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 5, 3)# 为了旋转框
         self.num_feature_levels = num_feature_levels
+        self.use_spectral_token = True
         if not two_stage:
             self.query_embed = nn.Embedding(num_queries, hidden_dim*2)
+
+        if self.use_spectral_token:
+            # 根据backbone的数量构造相应数量的spec_token
+            self.spec_token_list = nn.ModuleList(
+                [
+                    nn.Embedding(1, hidden_dim)
+                    for i in range(self.num_feature_levels)
+                ]
+            )
+            # self.spec_token = nn.Embedding(num_queries, hidden_dim)# 包括
+
         if num_feature_levels > 1:
             num_backbone_outs = len(backbone.strides)
             input_proj_list = []
@@ -161,7 +173,9 @@ class DeformableDETR(nn.Module):
         query_embeds = None
         if not self.two_stage:
             query_embeds = self.query_embed.weight
-        hs, init_reference, inter_references, enc_outputs_class, enc_outputs_coord_unact = self.transformer(srcs, masks, pos, query_embeds)
+        if self.use_spectral_token:
+            spec_tokens = torch.cat([self.spec_token_list[i].weight for i in range(len(self.spec_token_list))], dim=0)
+        hs, init_reference, inter_references, enc_outputs_class, enc_outputs_coord_unact = self.transformer(srcs, masks, pos, query_embeds, spec_tokens)
 
         outputs_classes = []
         outputs_coords = []
