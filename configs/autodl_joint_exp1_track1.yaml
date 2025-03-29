@@ -1,0 +1,22 @@
+SUPER_CONFIG_PATH: ./configs/autodl_r50_deformable_detr_motip_hsmot8ch.yaml
+
+MODE: submit
+
+DETR_PRETRAIN: /root/hsmot/workdir/motip/pretrain_10lrconv_LoadPretrainRight/checkpoint_19.pth   # Pretrain from COCO checkpoint
+
+# Inference:
+INFERENCE_MODEL: /root/hsmot/workdir/motip/joint_exp1/checkpoint_17.pth
+INFERENCE_ONLY_DETR: False
+INFERENCE_DATASET: hsmot_8ch
+INFERENCE_SPLIT: test
+INFERENCE_CONFIG_PATH:          # mostly, you don't need to set this parameter. See submit_engine.py L34 for more details.
+INFERENCE_GROUP:
+INFERENCE_MAX_SIZE: 1333
+INFERENCE_ENSEMBLE: 0
+# Thresholds:
+ID_THRESH: 0.2
+DET_THRESH: 0.3 #0.3
+NEWBORN_THRESH: 0.6 #0.6
+AREA_THRESH: 5
+
+OUTPUTS_DIR: /root/hsmot/workdir/motip/joint_exp1_track

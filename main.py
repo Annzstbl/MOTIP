@@ -145,9 +145,8 @@ def main(config: dict):
                                config["INFERENCE_GROUP"] if config["INFERENCE_GROUP"] is not None else "default",
                                config["INFERENCE_SPLIT"])
     elif config["MODE"] == "submit":
-        log_dir = os.path.join(config["OUTPUTS_DIR"], config["MODE"],
-                               config["INFERENCE_GROUP"] if config["INFERENCE_GROUP"] is not None else "default",
-                               config["INFERENCE_SPLIT"])
+        log_dir = os.path.join(config["OUTPUTS_DIR"], config["INFERENCE_GROUP"] if config["INFERENCE_GROUP"] is not None else "default",)
+                            #    config["INFERENCE_SPLIT"])
     else:
         raise NotImplementedError(f"Do not support running mode '{config['MODE']}' yet.")
 

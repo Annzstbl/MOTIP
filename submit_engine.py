@@ -42,11 +42,11 @@ def submit(config: dict, logger: Logger):
         model = DDP(model, device_ids=[distributed_rank()])
 
     if config["INFERENCE_GROUP"] is not None:
-        submit_outputs_dir = os.path.join(config["OUTPUTS_DIR"], config["MODE"], config["INFERENCE_GROUP"],
-                                          config["INFERENCE_SPLIT"],
-                                          f'{config["INFERENCE_MODEL"].split("/")[-1][:-4]}')
+        submit_outputs_dir = os.path.join(config["OUTPUTS_DIR"], config["INFERENCE_GROUP"], config["MODE"], )
+                                        #   config["INFERENCE_SPLIT"],
+                                        #   f'{config["INFERENCE_MODEL"].split("/")[-1][:-4]}')
     else:
-        submit_outputs_dir = os.path.join(config["OUTPUTS_DIR"], config["MODE"])
+        submit_outputs_dir = os.path.join(config["OUTPUTS_DIR"], "default", config["MODE"])
 
     # 需要调度整个 submit 流程
     submit_one_epoch(
@@ -84,7 +84,8 @@ def submit_one_epoch(config: dict, model: nn.Module,
             submit_one_seq(
                 model=model, dataset=dataset,
                 seq_dir=os.path.join(config["DATA_ROOT"], dataset, data_split, 'npy', seq),
-                only_detr=only_detr, max_temporal_length=config["MAX_TEMPORAL_LENGTH"],
+                only_detr=only_detr, 
+                max_temporal_length=min(config["MAX_TEMPORAL_LENGTH"], max(config["SAMPLE_LENGTHS"])),
                 outputs_dir=outputs_dir,
                 det_thresh=config["DET_THRESH"],
                 newborn_thresh=config["DET_THRESH"] if "NEWBORN_THRESH" not in config else config["NEWBORN_THRESH"],

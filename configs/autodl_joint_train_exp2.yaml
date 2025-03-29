@@ -1,0 +1,10 @@
+SUPER_CONFIG_PATH: ./configs/autodl_r50_deformable_detr_motip_hsmot8ch.yaml
+
+MODE: train
+
+DETR_PRETRAIN: /root/hsmot/workdir/motip/pretrain_10lrconv_LoadPretrainRight/checkpoint_19.pth   # Pretrain from COCO checkpoint
+
+SAMPLE_LENGTHS: [25]
+MAX_TEMPORAL_LENGTH: 25 
+
+OUTPUTS_DIR: /root/hsmot/workdir/motip/joint_exp2
