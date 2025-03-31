@@ -1,0 +1,8 @@
+SUPER_CONFIG_PATH: /data/users/wangying01/lth/hsmot/MOTIP/configs/99_joint_10lrfconv.yaml
+
+MODE: submit
+INFERENCE_GROUP: track1
+
+OUTPUTS_DIR: /data/users/wangying01/lth/hsmot/workdir/trash/motip_99/motip_r50_train_hsmot_8ch_firstconv10lr_4gpu
+
+INFERENCE_MODEL: /data/users/wangying01/lth/hsmot/workdir/trash/motip_99/motip_r50_train_hsmot_8ch_firstconv10lr_4gpu/checkpoint_13.pth
