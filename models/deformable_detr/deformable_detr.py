@@ -40,7 +40,7 @@ def _get_clones(module, N):
 class DeformableDETR(nn.Module):
     """ This is the Deformable DETR module that performs object detection """
     def __init__(self, backbone, transformer, num_classes, num_queries, num_feature_levels,
-                 aux_loss=True, with_box_refine=False, two_stage=False, rt_version='le135'):
+                 aux_loss=True, with_box_refine=False, two_stage=False, rt_version='le135', num_spectral_token=0):
         """ Initializes the model.
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
@@ -61,15 +61,15 @@ class DeformableDETR(nn.Module):
         # self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 5, 3)# 为了旋转框
         self.num_feature_levels = num_feature_levels
-        self.use_spectral_token = True
+        self.num_spectral_token = num_spectral_token
         if not two_stage:
             self.query_embed = nn.Embedding(num_queries, hidden_dim*2)
 
-        if self.use_spectral_token:
+        if self.num_spectral_token > 0:
             # 根据backbone的数量构造相应数量的spec_token
             self.spec_token_list = nn.ModuleList(
                 [
-                    nn.Embedding(1, hidden_dim)
+                    nn.Embedding(self.num_spectral_token, hidden_dim)
                     for i in range(self.num_feature_levels)
                 ]
             )
@@ -173,9 +173,12 @@ class DeformableDETR(nn.Module):
         query_embeds = None
         if not self.two_stage:
             query_embeds = self.query_embed.weight
-        if self.use_spectral_token:
-            spec_tokens = torch.cat([self.spec_token_list[i].weight for i in range(len(self.spec_token_list))], dim=0)
-        hs, init_reference, inter_references, enc_outputs_class, enc_outputs_coord_unact = self.transformer(srcs, masks, pos, query_embeds, spec_tokens)
+        if self.num_spectral_token>0:
+            spec_tokens = torch.stack([self.spec_token_list[i].weight for i in range(len(self.spec_token_list))], dim=0)# [lvl, n_spectoken, C]
+        else:
+            spec_tokens = None
+        #! spec_heat
+        hs, init_reference, inter_references, enc_outputs_class, enc_outputs_coord_unact, spec_heat = self.transformer(srcs, masks, pos, query_embeds, spec_tokens)
 
         outputs_classes = []
         outputs_coords = []
@@ -209,6 +212,8 @@ class DeformableDETR(nn.Module):
         # Output the outputs of last decoder layer.
         # We need these outputs to generate the embeddings for objects.
         out["outputs"] = hs[-1]
+        if spec_heat:
+            out["spec_heat"] = spec_heat
         return out
 
     @torch.jit.unused
@@ -241,6 +246,20 @@ class SetCriterion(nn.Module):
         self.weight_dict = weight_dict
         self.losses = losses
         self.focal_alpha = focal_alpha
+
+    def loss_heatmaps(self, outputs, targets, _, __, ):
+        #TODO
+        src_heatmap = outputs['spec_heat'] # is a list
+        tgt_heatmap = targets['spec_heat'] if 'spec_heat' in targets else None
+
+        loss_heatmap = {}
+        for i in range(len(src_heatmap)):
+            # just for debug
+            tgt_heatmap = torch.zeros(src_heatmap[i].shape, device=src_heatmap[i].device)
+            loss_heatmap[f'loss_spec_{i}'] = F.mse_loss(src_heatmap[i], tgt_heatmap)
+        
+        return loss_heatmap
+
 
     def loss_labels(self, outputs, targets, indices, num_boxes, log=True):
         """Classification loss (NLL)
@@ -298,7 +317,7 @@ class SetCriterion(nn.Module):
         losses = {}
         losses['loss_bbox'] = loss_bbox.sum() / num_boxes
 
-        loss_giou = 1 - loss_rotated_iou_norm_bboxes1(src_boxes, target_boxes, img_metas['img_shape'], img_metas['version'])
+        loss_giou = 1 - loss_rotated_iou_norm_bboxes1(src_boxes, target_boxes, img_metas[0][0]['img_shape'], img_metas[0][0]['version'])
         # loss_giou = 1 - torch.diag(box_ops.generalized_box_iou(
         #     box_ops.box_cxcywh_to_xyxy(src_boxes),
         #     box_ops.box_cxcywh_to_xyxy(target_boxes)))
@@ -351,7 +370,8 @@ class SetCriterion(nn.Module):
             'labels': self.loss_labels,
             'cardinality': self.loss_cardinality,
             'boxes': self.loss_boxes,
-            'masks': self.loss_masks
+            'masks': self.loss_masks,
+            'spec_heat': self.loss_heatmaps
         }
         assert loss in loss_map, f'do you really want to compute {loss} loss?'
         return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)
@@ -386,7 +406,7 @@ class SetCriterion(nn.Module):
             for i, aux_outputs in enumerate(outputs['aux_outputs']):
                 indices = self.matcher(aux_outputs, targets, img_metas)
                 for loss in self.losses:
-                    if loss == 'masks':
+                    if loss == 'masks' or loss == 'spec_heat':
                         # Intermediate masks losses are too costly to compute, we ignore them.
                         continue
                     kwargs = {'img_metas': img_metas} if loss == 'boxes' else {}
@@ -496,6 +516,7 @@ def build(args):
     if args.masks:
         weight_dict["loss_mask"] = args.mask_loss_coef
         weight_dict["loss_dice"] = args.dice_loss_coef
+
     # TODO this is a hack
     if args.aux_loss:
         aux_weight_dict = {}
@@ -507,6 +528,12 @@ def build(args):
     losses = ['labels', 'boxes', 'cardinality']
     if args.masks:
         losses += ["masks"]
+
+    if args.num_spectral_token>0: #不计算aux_loss
+        losses += ["spec_heat"]
+        for i in range(args.num_feature_levels):
+            weight_dict[f'loss_spec_{i}'] = args.spectral_token_loss_coef
+
     # num_classes, matcher, weight_dict, losses, focal_alpha=0.25
     criterion = SetCriterion(num_classes, matcher, weight_dict, losses, focal_alpha=args.focal_alpha)
     criterion.to(device)

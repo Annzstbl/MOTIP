@@ -1,3 +1,15 @@
 SUPER_CONFIG_PATH: /data/users/litianhao/hsmot_code/MOTIP/configs/197_base.yaml
 
 OUTPUTS_DIR: /data3/litianhao/hsmot/motip/debug
+
+
+# NUM_SPECTRAL_TOKEN: 1
+# SPECTRAL_TOKEN_LOSS_COEF: 2.0
+
+
+
+SAMPLE_LENGTHS: [1]
+TRAIN_STAGE: only_detr
+BATCH_SIZE: 4
+
+DETR_PRETRAIN: /data/users/litianhao/hsmot_code/workdir/motip_99/pretrain_10lrconv_distill/checkpoint_19.pth

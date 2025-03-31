@@ -18,6 +18,7 @@ from torch.nn.init import xavier_uniform_, constant_, uniform_, normal_
 
 from utils.utils import inverse_sigmoid
 from models.ops.modules import MSDeformAttn
+from models.ops.modules import MSDeformAttn_Spec
 
 
 class DeformableTransformer(nn.Module):
@@ -25,17 +26,18 @@ class DeformableTransformer(nn.Module):
                  num_encoder_layers=6, num_decoder_layers=6, dim_feedforward=1024, dropout=0.1,
                  activation="relu", return_intermediate_dec=False,
                  num_feature_levels=4, dec_n_points=4,  enc_n_points=4,
-                 two_stage=False, two_stage_num_proposals=300):
+                 two_stage=False, two_stage_num_proposals=300, use_spectoken=False):
         super().__init__()
 
         self.d_model = d_model
         self.nhead = nhead
         self.two_stage = two_stage
         self.two_stage_num_proposals = two_stage_num_proposals
+        self.use_spectoken = use_spectoken
 
         encoder_layer = DeformableTransformerEncoderLayer(d_model, dim_feedforward,
                                                           dropout, activation,
-                                                          num_feature_levels, nhead, enc_n_points)
+                                                          num_feature_levels, nhead, enc_n_points, self.use_spectoken)
         self.encoder = DeformableTransformerEncoder(encoder_layer, num_encoder_layers)
 
         decoder_layer = DeformableTransformerDecoderLayer(d_model, dim_feedforward,
@@ -44,6 +46,8 @@ class DeformableTransformer(nn.Module):
         self.decoder = DeformableTransformerDecoder(decoder_layer, num_decoder_layers, return_intermediate_dec)
 
         self.level_embed = nn.Parameter(torch.Tensor(num_feature_levels, d_model))
+
+        self.spec_token_heat = SpectokenHeat()
 
         if two_stage:
             self.enc_output = nn.Linear(d_model, d_model)
@@ -131,7 +135,8 @@ class DeformableTransformer(nn.Module):
         mask_flatten = []
         lvl_pos_embed_flatten = []
         spatial_shapes = []
-        for lvl, (src, mask, pos_embed, _spec_token_lvl) in enumerate(zip(srcs, masks, pos_embeds, spec_token)):
+        lvl_embed_spec = []
+        for lvl, (src, mask, pos_embed,) in enumerate(zip(srcs, masks, pos_embeds,)):
             bs, c, h, w = src.shape
             spatial_shape = (h, w)
             spatial_shapes.append(spatial_shape)
@@ -139,22 +144,27 @@ class DeformableTransformer(nn.Module):
             mask = mask.flatten(1)
             pos_embed = pos_embed.flatten(2).transpose(1, 2)
             lvl_pos_embed = pos_embed + self.level_embed[lvl].view(1, 1, -1)
-            _spec_token_lvl += self.level_embed[lvl]
+            _lvl_spec_embed = self.level_embed[lvl]
+
             lvl_pos_embed_flatten.append(lvl_pos_embed)
             src_flatten.append(src)
             mask_flatten.append(mask)
+            lvl_embed_spec.append(_lvl_spec_embed)
 
-        spec_token = spec_token.unsqueeze(0).repeat(bs, 1, 1)
 
         src_flatten = torch.cat(src_flatten, 1)
         mask_flatten = torch.cat(mask_flatten, 1)
         lvl_pos_embed_flatten = torch.cat(lvl_pos_embed_flatten, 1)
+        if spec_token is not None:
+            lvl_embed_spec = torch.stack(lvl_embed_spec, 0).unsqueeze(1).repeat(1, spec_token.shape[2], 1)
+            spec_token = spec_token.unsqueeze(0).repeat(bs, 1, 1, 1)
+
         spatial_shapes = torch.as_tensor(spatial_shapes, dtype=torch.long, device=src_flatten.device)
         level_start_index = torch.cat((spatial_shapes.new_zeros((1, )), spatial_shapes.prod(1).cumsum(0)[:-1]))
         valid_ratios = torch.stack([self.get_valid_ratio(m) for m in masks], 1)
 
         # encoder
-        memory = self.encoder(src_flatten, spatial_shapes, level_start_index, valid_ratios, lvl_pos_embed_flatten, mask_flatten, spec_token)
+        memory, memory_spec = self.encoder(src_flatten, spatial_shapes, level_start_index, valid_ratios, lvl_pos_embed_flatten, mask_flatten, spec_token, lvl_embed_spec)
 
         # prepare input for decoder
         bs, _, c = memory.shape
@@ -184,22 +194,30 @@ class DeformableTransformer(nn.Module):
         hs, inter_references = self.decoder(tgt, reference_points, memory,
                                             spatial_shapes, level_start_index, valid_ratios, query_embed, mask_flatten)
 
+
         inter_references_out = inter_references
         if self.two_stage:
             raise RuntimeError(f"You should not use 'two stage'.")
             return hs, init_reference_out, inter_references_out, enc_outputs_class, enc_outputs_coord_unact
-        return hs, init_reference_out, inter_references_out, None, None
+        if self.use_spectoken:
+            spec_heat = self.spec_token_heat(memory_spec, memory, spatial_shapes, level_start_index)
+            return hs, init_reference_out, inter_references_out, None, None, spec_heat
+        
+        return hs, init_reference_out, inter_references_out, None, None, None
 
 
 class DeformableTransformerEncoderLayer(nn.Module):
     def __init__(self,
                  d_model=256, d_ffn=1024,
                  dropout=0.1, activation="relu",
-                 n_levels=4, n_heads=8, n_points=4):
+                 n_levels=4, n_heads=8, n_points=4, use_spectoken=False):
         super().__init__()
 
+        if use_spectoken:
         # self attention
-        self.self_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
+            self.self_attn = MSDeformAttn_Spec(d_model, n_levels, n_heads, n_points)
+        else:
+            self.self_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
 
@@ -221,24 +239,49 @@ class DeformableTransformerEncoderLayer(nn.Module):
         src = self.norm2(src)
         return src
 
-    def forward(self, src, pos, reference_points, spatial_shapes, level_start_index, padding_mask=None, spec_token=None, spec_token_ref_points=None):
+    def forward(self, src, pos, reference_points, spatial_shapes, level_start_index, padding_mask=None, spec_token=None, lvl_pos_embed_spec=None):
         # self attention
-        # if spec_token is not None:
-        if False:#TODO for debug
-            src = self.with_pos_embed(src, pos)
-            src = torch.cat((spec_token, src), 1)
-            ref_points_spec = torch.cat((spec_token_ref_points, reference_points), 1)
-
-            src2 = self.self_attn(src, ref_points_spec, src, spatial_shapes, level_start_index, padding_mask)
+        if spec_token is not None:
+            src, spec_token = self.self_attn(self.with_pos_embed(src, pos), reference_points, src, spatial_shapes, level_start_index, padding_mask, self.with_pos_embed(spec_token, lvl_pos_embed_spec), spec_token)
         else:
-            src2 = self.self_attn(self.with_pos_embed(src, pos), reference_points, src, spatial_shapes, level_start_index, padding_mask)
+            src = self.self_attn(self.with_pos_embed(src, pos), reference_points, src, spatial_shapes, level_start_index, padding_mask)
         src = self.norm1(src)
-
         # ffn
         src = self.forward_ffn(src)
 
-        return src
+        if spec_token:
+            spec_token = self.norm1(spec_token)
+            spec_token = self.forward_ffn(spec_token)
 
+        return src, spec_token
+
+
+class SpectokenHeat(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        
+    def forward(self, spec_token, spatial_token, spatial_shapes, level_start_index):
+        """
+        Args:
+            spec_token: (N, lvl, n_spec, C)
+            spatial_token: (N, L, C)
+            spatial_shapes: (lvl, 2)
+            level_start_index: (lvl,)
+
+        """
+        N, L, C = spatial_token.shape
+        N, lvl, n_spec, C = spec_token.shape
+
+        cos_lvl_list = []
+
+        # 对于每个lvl计算余弦相似度, 之后reshape成spatial_shapes指定的shape
+        for i in range(lvl):
+            end_index = L if i == lvl-1 else level_start_index[i+1]
+            spatial_token_lvl =  spatial_token[:, level_start_index[i]:end_index, :]
+            cos_lvl = torch.cosine_similarity(spatial_token_lvl.unsqueeze(2), spec_token[:, i, :, :].unsqueeze(1), dim=-1).view(N, spatial_shapes[i][0], spatial_shapes[i][1], n_spec)#[N, l_lvl分解, n_spec]
+            cos_lvl_list.append(cos_lvl)
+
+        return cos_lvl_list
 
 class DeformableTransformerEncoder(nn.Module):
     def __init__(self, encoder_layer, num_layers):
@@ -261,22 +304,16 @@ class DeformableTransformerEncoder(nn.Module):
         reference_points = reference_points[:, :, None] * valid_ratios[:, None]
         return reference_points
 
-    @staticmethod
-    def get_spec_token_reference_points(spec_token, device):
-        bs , lvl, _ = spec_token.shape
-        return torch.zeros((bs, lvl, lvl, 2), dtype=torch.float32, device=device)# dim1是4层特征图，dim2是 每层特征图的[4,2]refpoints
 
-
-    def forward(self, src, spatial_shapes, level_start_index, valid_ratios, pos=None, padding_mask=None, spec_token=None):
+    def forward(self, src, spatial_shapes, level_start_index, valid_ratios, pos=None, padding_mask=None, spec_token=None, lvl_pos_embed_spec=None):
         output = src
         reference_points = self.get_reference_points(spatial_shapes, valid_ratios, device=src.device)
-        spec_token_ref_points = self.get_spec_token_reference_points(spec_token=spec_token, device=src.device)
 
         for _, layer in enumerate(self.layers):
             # output, spec_token = layer(output, pos, reference_points, spatial_shapes, level_start_index, padding_mask, spec_token, spec_token_ref_points)
-            output = layer(output, pos, reference_points, spatial_shapes, level_start_index, padding_mask, spec_token, spec_token_ref_points)
+            output, spec_token = layer(output, pos, reference_points, spatial_shapes, level_start_index, padding_mask, spec_token, lvl_pos_embed_spec)
 
-        return output
+        return output, spec_token
 
 
 class DeformableTransformerDecoderLayer(nn.Module):

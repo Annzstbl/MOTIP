@@ -174,6 +174,9 @@ def main(config: dict):
     if "INPUT_CHANNELS" not in config:
         config['INPUT_CHANNELS'] = 3
     
+    if "NUM_SPECTRAL_TOKEN" not in config:
+        config['NUM_SPECTRAL_TOKEN'] = 0
+
     if config["MODE"] == "train":
         train(config=config, logger=logger)
     elif config["MODE"] == "eval":

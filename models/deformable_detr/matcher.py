@@ -89,7 +89,7 @@ class HungarianMatcher(nn.Module):
             # Compute the giou cost betwen boxes
             # cost_giou = -generalized_box_iou(box_cxcywh_to_xyxy(out_bbox),
             #                                  box_cxcywh_to_xyxy(tgt_bbox))
-            cost_giou = -box_iou_rotated_norm_bboxes1(out_bbox, tgt_bbox, img_shape=img_metas['img_shape'], version = img_metas['version'])
+            cost_giou = -box_iou_rotated_norm_bboxes1(out_bbox, tgt_bbox, img_shape=img_metas[0][0]['img_shape'], version = img_metas[0][0]['version'])
             
             # Final cost matrix
             C = self.cost_bbox * cost_bbox + self.cost_class * cost_class + self.cost_giou * cost_giou

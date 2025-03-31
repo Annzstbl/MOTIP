@@ -224,7 +224,7 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
         iter_start_timestamp = TPS.timestamp()
 
         # prepare some meta info
-        num_gts = sum([len(info["boxes"]) for info in batch["infos"][0]])
+        num_gts = sum([len(info["boxes"]) for info in batch["infos"][0]])#只计算了batch1的数量, 也只用于checkpoint
 
         B, T = len(batch["images"]), len(batch["images"][0])
         detr_num_train_frames = min(detr_num_train_frames, T)
@@ -287,7 +287,7 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
         if memory_optimized_detr_criterion or (auto_memory_optimized_detr_criterion and num_gts > 2400):
             train_detr_outputs = detr_outputs_index_select(detr_outputs, index=detr_train_frame_idxs.to(device))
             train_detr_targets = [detr_targets[_] for _ in detr_train_frame_idxs.tolist()]
-            detr_loss_dict, _ = get_model(model).detr_criterion(outputs=train_detr_outputs, targets=train_detr_targets, img_metas=batch["img_metas"][0][0])
+            detr_loss_dict, _ = get_model(model).detr_criterion(outputs=train_detr_outputs, targets=train_detr_targets, img_metas=batch["img_metas"])
             match_idxs = []
             with torch.no_grad():
                 idxs = torch.arange(0, len(detr_targets), device=device)
@@ -298,7 +298,7 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
                     m = get_model(model).detr_criterion.matcher(
                         outputs=outputs_without_aux,
                         targets=[detr_targets[_] for _ in idx.tolist()],
-                        img_metas=batch["img_metas"][0][0]
+                        img_metas=batch["img_metas"]
                     )
                     match_idxs += m
                     pass
@@ -307,40 +307,44 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
             if checkpoint_detr_criterion:
                 detr_loss_dict, match_idxs = checkpoint(
                     get_model(model).detr_criterion,
-                    detr_outputs, detr_targets,img_metas=batch["img_metas"][0][0],
+                    detr_outputs, detr_targets,img_metas=batch["img_metas"],
                     use_reentrant=False
                 )
             else:
-                detr_loss_dict, match_idxs = get_model(model).detr_criterion(outputs=detr_outputs, targets=detr_targets, img_metas=batch["img_metas"][0][0])
+                detr_loss_dict, match_idxs = get_model(model).detr_criterion(outputs=detr_outputs, targets=detr_targets, img_metas=batch["img_metas"])
 
         if i % save_debug_img_interval == 0 and save_debug_dir is not None:
-            ## 画图
-            # __box = detr_outputs['pred_boxes'][0]
-            __img = batch['images'][0][0]
-            __info = batch['img_metas'][0][0]
-            __info['filename'] = 'debug.npy'
-            mean = __info['transform_metas'].data['img_norm_cfg']['mean']
-            std = __info['transform_metas'].data['img_norm_cfg']['std']
-            motshow = MotShow(save_path=save_debug_dir, mean =mean, std = std, to_bgr=False, show_proposals=True )
-            
-            detr_pred_boxes = detr_outputs['pred_boxes'][0].detach().cpu()
-            box_results = rotate_norm_boxes_to_boxes(detr_pred_boxes, (__info['img_shape']), version='le135')
-            box_confs = detr_outputs['pred_logits'][0].detach().cpu().sigmoid().max(1).values
-            gts = batch['infos'][0][0]['boxes']
-            match = match_idxs[0]
+            B, T = len(batch["images"]), len(batch["images"][0])
+            for b in list(set([0, B-1])):
+                for t in list(set([0, T-1])):
+                    # __img = batch['images'][b][t]
+                    __img = batch['nested_tensors'].decompose()[0][b][t]
+                    __info = batch['img_metas'][0][0]
+                    __info['filename'] = 'debug.npy'
+                    mean = __info['transform_metas'].data['img_norm_cfg']['mean']
+                    std = __info['transform_metas'].data['img_norm_cfg']['std']
+                    motshow = MotShow(save_path=save_debug_dir, mean =mean, std = std, to_bgr=False, show_proposals=True )
 
-            box_results = box_results[match[0]]
-            gts = gts[match[1]]
-            box_confs = box_confs[match[0]]
+                    detr_pred_boxes = detr_outputs['pred_boxes'][b*T+t].detach().cpu()
+                    box_results = rotate_norm_boxes_to_boxes(detr_pred_boxes, (__info['img_shape']), version='le135')
+                    box_confs = detr_outputs['pred_logits'][b*T+t].detach().cpu().sigmoid().max(1).values
+                    # gts = batch['infos'][b][t]['boxes']
+                    gts = batch['infos'][b][t]['norm_boxes']
+                    gts = rotate_norm_boxes_to_boxes(gts, (__info['img_shape']), version='le135')
+                    match = match_idxs[b*T+t]
 
-            _result = {
-                'img': __img.permute(1,2,0).detach().cpu().numpy(),
-                'proposals': box_results,
-                'proposal_scores': box_confs,
-                'gt_bboxes': gts,
-                'img_info': __info,
-            }
-            motshow([_result])
+                    box_results = box_results[match[0]]
+                    gts = gts[match[1]]
+                    box_confs = box_confs[match[0]]
+
+                    _results = {
+                        'img': __img.permute(1,2,0).detach().cpu().numpy(),
+                        'proposals': box_results,
+                        'proposal_scores': box_confs,
+                        'gt_bboxes': gts,
+                        'img_info': __info,
+                    }
+                    motshow([_results])
 
         if config["TRAIN_STAGE"] == "only_detr":    # only train detr part:
             id_loss = None
@@ -378,6 +382,11 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
         metrics["bbox_l1"].update(detr_loss_dict["loss_bbox"].item())
         metrics["bbox_giou"].update(detr_loss_dict["loss_giou"].item())
         metrics["cls_loss"].update(detr_loss_dict["loss_ce"].item())
+
+        if any(["loss_pec" in k for k in detr_loss_dict.keys()]):
+            for j in range(config['DETR_NUM_FEATURE_LEVELS']):
+                metrics[f"spec_loss_{j}"].update(detr_loss_dict[f"loss_spec_{j}"].item())
+
         if config["TRAIN_STAGE"] != "only_detr":    # log about id branch is also need to be written:
             metrics["overall_id_loss"].update(id_loss.item() * id_criterion.weight)
             metrics["id_loss"].update(id_loss.item())

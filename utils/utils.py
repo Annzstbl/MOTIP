@@ -190,6 +190,13 @@ def combine_detr_outputs(detr_outputs1, detr_outputs2):
         }
         for _ in range(len(detr_outputs1["aux_outputs"]))
     ]
+
+    if "spec_heat" in detr_outputs1:
+        combined_outputs["spec_heat"] = [
+            torch.cat([detr_outputs1["spec_heat"][_], detr_outputs2["spec_heat"][_]], dim=0)
+            for _ in range(len(detr_outputs1["spec_heat"]))
+        ]
+
     if "dn_meta" in detr_outputs1:  # for DINO?
         combined_outputs["dn_meta"] = {}
         combined_outputs["dn_meta"]["pad_size"] = detr_outputs1["dn_meta"]["pad_size"]
@@ -252,6 +259,13 @@ def detr_outputs_index_select(detr_outputs, index, dim: int = 0):
         }
         for _ in range(len(detr_outputs["aux_outputs"]))
     ]
+    
+    if "spec_heat" in detr_outputs:
+        selected_detr_outputs["spec_heat"] = [
+            torch.index_select(detr_outputs["spec_heat"][_], index=index, dim=dim).contiguous()
+            for _ in range(len(detr_outputs["spec_heat"]))
+        ]
+
     if "dn_meta" in detr_outputs:
         selected_detr_outputs["dn_meta"] = {
             "pad_size": detr_outputs["dn_meta"]["pad_size"],

@@ -59,6 +59,9 @@ class MOTIP(nn.Module):
         self.only_detr = config["TRAIN_STAGE"] == "only_detr"
 
         self.input_channels = config["INPUT_CHANNELS"]
+        self.num_spectral_token = config["NUM_SPECTRAL_TOKEN"]
+        if self.num_spectral_token > 0:
+            self.spectral_token_loss_coef = config["SPECTRAL_TOKEN_LOSS_COEF"]
 
         # Prepare args for detr
         detr_args = Args()
@@ -92,6 +95,11 @@ class MOTIP(nn.Module):
         detr_args.set_cost_giou = self.detr_set_cost_giou
         # 多光谱图像 构造backbone时使用
         detr_args.input_channels = self.input_channels
+        # spectoken
+        detr_args.num_spectral_token = self.num_spectral_token
+        if detr_args.num_spectral_token > 0:
+            detr_args.spectral_token_loss_coef = self.spectral_token_loss_coef
+
 
         if self.detr_framework == "Deformable-DETR":
             # DETR model and criterion:

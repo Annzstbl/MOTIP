@@ -127,8 +127,8 @@ EXP_OWNER:
 # Settings which are used to reduce the memory usage of DETR criterion.
 # Too many objects (such as CrowdHuman) may cause OOM error.
 MEMORY_OPTIMIZED_DETR_CRITERION: False
-AUTO_MEMORY_OPTIMIZED_DETR_CRITERION: True # 原参数 False
-CHECKPOINT_DETR_CRITERION: True # 原参数 False
+AUTO_MEMORY_OPTIMIZED_DETR_CRITERION: False # 原参数 False
+CHECKPOINT_DETR_CRITERION: False # 原参数 False
 
 
 # Rotate parameters
