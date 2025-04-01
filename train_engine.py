@@ -138,46 +138,46 @@ def train(config: dict, logger: Logger):
                             scheduler=scheduler,
                             only_detr=config["TRAIN_STAGE"] == "only_detr",
                             )
-            # 不推理
-            # if config["INFERENCE_DATASET"] is not None:
-            #     if config["TRAIN_STAGE"] == "only_detr":
-            #         eval_metrics = evaluate_one_epoch(
-            #             config=config,
-            #             model=model,
-            #             logger=logger,
-            #             dataset=config["INFERENCE_DATASET"],
-            #             data_split=config["INFERENCE_SPLIT"],
-            #             outputs_dir=os.path.join(config["OUTPUTS_DIR"], config["MODE"],
-            #                                      "eval_during_train", config["INFERENCE_SPLIT"], f"epoch_{epoch}"),
-            #             only_detr=True
-            #         )
-            #     else:
-            #         eval_metrics = evaluate_one_epoch(
-            #             config=config,
-            #             model=model,
-            #             logger=logger,
-            #             dataset=config["INFERENCE_DATASET"],
-            #             data_split=config["INFERENCE_SPLIT"],
-            #             outputs_dir=os.path.join(config["OUTPUTS_DIR"], config["MODE"],
-            #                                      "eval_during_train", config["INFERENCE_SPLIT"], f"epoch_{epoch}"),
-            #             only_detr=False
-            #         )
-            #     eval_metrics.sync()
-            #     logger.print_metrics(
-            #         metrics=eval_metrics,
-            #         prompt=f"[Epoch {epoch} Eval] ",
-            #         fmt="{global_average:.4f}"
-            #     )
-            #     logger.save_metrics(
-            #         metrics=eval_metrics,
-            #         prompt=f"[Epoch {epoch} Eval] ",
-            #         fmt="{global_average:.4f}",
-            #         statistic="global_average",
-            #         global_step=train_states["global_iter"],
-            #         prefix="epoch",
-            #         x_axis_step=epoch,
-            #         x_axis_name="epoch"
-            #     )
+            if config["INFERENCE_DATASET"] is not None:
+                if config["TRAIN_STAGE"] == "only_detr":
+                    eval_metrics = evaluate_one_epoch(
+                        config=config,
+                        model=model,
+                        logger=logger,
+                        dataset=config["INFERENCE_DATASET"],
+                        data_split=config["INFERENCE_SPLIT"],
+                        outputs_dir=os.path.join(config["OUTPUTS_DIR"], config["MODE"],
+                                                 "eval_during_train", config["INFERENCE_SPLIT"], f"epoch_{epoch}", "submit"),
+                        only_detr=True
+                    )
+                else:
+                    eval_metrics = evaluate_one_epoch(
+                        config=config,
+                        model=model,
+                        logger=logger,
+                        dataset=config["INFERENCE_DATASET"],
+                        data_split=config["INFERENCE_SPLIT"],
+                        outputs_dir=os.path.join(config["OUTPUTS_DIR"], config["MODE"],
+                                                 "eval_during_train", config["INFERENCE_SPLIT"], f"epoch_{epoch}",
+                                                 "submit"),
+                        only_detr=False
+                    )
+                eval_metrics.sync()
+                logger.print_metrics(
+                    metrics=eval_metrics,
+                    prompt=f"[Epoch {epoch} Eval] ",
+                    fmt="{global_average:.4f}"
+                )
+                logger.save_metrics(
+                    metrics=eval_metrics,
+                    prompt=f"[Epoch {epoch} Eval] ",
+                    fmt="{global_average:.4f}",
+                    statistic="global_average",
+                    global_step=train_states["global_iter"],
+                    prefix="epoch",
+                    x_axis_step=epoch,
+                    x_axis_name="epoch"
+                )
 
         # Next step.
         scheduler.step()

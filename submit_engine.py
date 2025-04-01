@@ -59,9 +59,9 @@ def submit(config: dict, logger: Logger):
         only_detr=config["INFERENCE_ONLY_DETR"]
     )
 
-    logger.print(log=f"Finish submit process for model '{config['INFERENCE_MODEL']}' on the {config['INFERENCE_DATASET']} {config['INFERENCE_SPLIT']} set, outputs are write to '{os.path.join(submit_outputs_dir, 'tracker')}/.'")
+    logger.print(log=f"Finish submit process for model '{config['INFERENCE_MODEL']}' on the {config['INFERENCE_DATASET']} {config['INFERENCE_SPLIT']} set, outputs are write to '{submit_outputs_dir}/.'")
     logger.save_log_to_file(
-        log=f"Finish submit process for model '{config['INFERENCE_MODEL']}' on the {config['INFERENCE_DATASET']} {config['INFERENCE_SPLIT']} set, outputs are write to '{os.path.join(submit_outputs_dir, 'tracker')}/.'",
+        log=f"Finish submit process for model '{config['INFERENCE_MODEL']}' on the {config['INFERENCE_DATASET']} {config['INFERENCE_SPLIT']} set, outputs are write to '{submit_outputs_dir}/.'",
         filename="log.txt",
         mode="a"
     )
@@ -122,7 +122,7 @@ def submit_one_seq(
             fake_submit: bool = False,
             inference_ensemble: int = 0,
         ):
-    os.makedirs(os.path.join(outputs_dir, "tracker"), exist_ok=True)
+    os.makedirs(outputs_dir, exist_ok=True)
     seq_dataset = SeqDataset(seq_dir=seq_dir, dataset=dataset, width=image_max_size)
     seq_dataloader = DataLoader(seq_dataset, batch_size=1, num_workers=4, shuffle=False)
     # seq_name = seq_dir.split("/")[-1]

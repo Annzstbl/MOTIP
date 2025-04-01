@@ -15,7 +15,7 @@ from log.log import Metrics
 from utils.utils import is_distributed, distributed_rank, yaml_to_dict, \
     distributed_world_size, is_main_process, distributed_world_rank
 from submit_engine import submit_one_seq, get_seq_names
-
+import sys
 
 def evaluate(config: dict, logger: Logger):
     """
@@ -78,7 +78,7 @@ def evaluate_one_epoch(config: dict, model: nn.Module,
         for seq in seq_names:
             submit_one_seq(
                 model=model, dataset=dataset,
-                seq_dir=os.path.join(config["DATA_ROOT"], dataset, data_split, seq),
+                seq_dir=os.path.join(config["DATA_ROOT"], dataset, data_split, 'npy', seq),
                 only_detr=only_detr, max_temporal_length=config["MAX_TEMPORAL_LENGTH"],
                 outputs_dir=outputs_dir,
                 det_thresh=config["DET_THRESH"],
@@ -101,55 +101,36 @@ def evaluate_one_epoch(config: dict, model: nn.Module,
             inference_ensemble=config["INFERENCE_ENSEMBLE"] if "INFERENCE_ENSEMBLE" in config else 0,
         )
 
-    tracker_dir = os.path.join(outputs_dir, "tracker")
-    dataset_dir = os.path.join(config["DATA_ROOT"], dataset)
-    if dataset in ["DanceTrack", "SportsMOT"]:
-        gt_dir = os.path.join(dataset_dir, data_split)
-    elif dataset in ["MOT17_SPLIT", "MOT15", "MOT15_V2", "MOT17"]:
-        gt_dir = os.path.join(dataset_dir, data_split)
-    else:
-        raise NotImplementedError(f"Do not support to find the gt_dir for dataset '{dataset}'.")
+    tracker_dir = os.path.join(outputs_dir, '..', '..')
+    trackers_name = outputs_dir.split("/")[-2]
+    trackers_subfolder = outputs_dir.split("/")[-1]
+
+
+    dataset_dir = os.path.join(config["DATA_ROOT"], dataset.replace('_8ch',''))
+    gt_dir = os.path.join(dataset_dir, data_split, 'mot')
+    img_dir = os.path.join(dataset_dir, data_split, 'npy')
 
     if is_distributed():
         torch.distributed.barrier()
 
     if is_main_process():
-        # Need to eval the submit tracker:
-        if dataset == "DanceTrack" or dataset == "SportsMOT":
-            os.system(f"python3 TrackEval/scripts/run_mot_challenge.py --SPLIT_TO_EVAL {data_split}  "
-                      f"--METRICS HOTA CLEAR Identity  --GT_FOLDER {gt_dir} "
-                      f"--SEQMAP_FILE {os.path.join(dataset_dir, f'{data_split}_seqmap.txt')} "
-                      f"--SKIP_SPLIT_FOL True --TRACKERS_TO_EVAL '' --TRACKER_SUB_FOLDER ''  --USE_PARALLEL True "
-                      f"--NUM_PARALLEL_CORES 8 --PLOT_CURVES False "
-                      f"--TRACKERS_FOLDER {tracker_dir}")
-        elif dataset == "MOT17" and data_split == "test":
-            os.system(f"python3 TrackEval/scripts/run_mot_challenge.py --SPLIT_TO_EVAL {data_split}  "
-                      f"--METRICS HOTA CLEAR Identity  --GT_FOLDER {gt_dir} "
-                      f"--SEQMAP_FILE {os.path.join(dataset_dir, f'{data_split}_seqmap.txt')} "
-                      f"--SKIP_SPLIT_FOL True --TRACKERS_TO_EVAL '' --TRACKER_SUB_FOLDER ''  --USE_PARALLEL True "
-                      f"--NUM_PARALLEL_CORES 8 --PLOT_CURVES False "
-                      f"--TRACKERS_FOLDER {tracker_dir}")
-        elif dataset == "MOT17_SPLIT" or dataset == "MOT17":
-            os.system(f"python3 TrackEval/scripts/run_mot_challenge.py --SPLIT_TO_EVAL {data_split}  "
-                      f"--METRICS HOTA CLEAR Identity  --GT_FOLDER {gt_dir} "
-                      f"--SEQMAP_FILE {os.path.join(dataset_dir, f'{data_split}_seqmap.txt')} "
-                      f"--SKIP_SPLIT_FOL True --TRACKERS_TO_EVAL '' --TRACKER_SUB_FOLDER ''  --USE_PARALLEL True "
-                      f"--NUM_PARALLEL_CORES 8 --PLOT_CURVES False "
-                      f"--TRACKERS_FOLDER {tracker_dir} --BENCHMARK MOT17")
-        elif dataset == "MOT15" or dataset == "MOT15_V2":
-            os.system(f"python3 TrackEval/scripts/run_mot_challenge.py --SPLIT_TO_EVAL {data_split}  "
-                      f"--METRICS HOTA CLEAR Identity  --GT_FOLDER {gt_dir} "
-                      f"--SEQMAP_FILE {os.path.join(dataset_dir, f'{data_split}_seqmap.txt')} "
-                      f"--SKIP_SPLIT_FOL True --TRACKERS_TO_EVAL '' --TRACKER_SUB_FOLDER ''  --USE_PARALLEL True "
-                      f"--NUM_PARALLEL_CORES 8 --PLOT_CURVES False "
-                      f"--TRACKERS_FOLDER {tracker_dir} --BENCHMARK MOT15")
-        else:
-            raise NotImplementedError(f"Do not support to eval the results for dataset '{dataset}'.")
+        current_file_dir = os.path.dirname(os.path.abspath(__file__))
+        os_flag = os.system(
+            f"{sys.executable} {current_file_dir}/../TrackEval/scripts/run_hsmot_8ch.py " 
+            f"--USE_PARALLEL False "
+            f"--METRICS HOTA CLEAR Identity " 
+            f"--GT_FOLDER {gt_dir} "
+            f"--TRACKERS_FOLDER {tracker_dir} "
+            f"--TRACKERS_TO_EVAL {trackers_name} "
+            f"--TRACKER_SUB_FOLDER {trackers_subfolder} "
+            f"--IMG_FOLDER {img_dir} "
+        )
+        assert os_flag == 0, "TrackEval failed to run."
 
     if is_distributed():
         torch.distributed.barrier()
     # Get eval Metrics:
-    eval_metric_path = os.path.join(tracker_dir, "pedestrian_summary.txt")
+    eval_metric_path = os.path.join(tracker_dir, trackers_name, 'eval', "cls_comb_det_av_summary.txt")
     eval_metrics_dict = get_eval_metrics_dict(metric_path=eval_metric_path)
     metrics["HOTA"].update(eval_metrics_dict["HOTA"])
     metrics["DetA"].update(eval_metrics_dict["DetA"])
