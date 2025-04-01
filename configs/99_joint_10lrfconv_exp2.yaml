@@ -1,0 +1,9 @@
+SUPER_CONFIG_PATH: /data/users/wangying01/lth/hsmot/MOTIP/configs/99_joint.yaml
+
+#首层10倍(相对于backbone)
+LR_DICTIONARY_NAMES: [backbone.0.body.conv1.weight]
+LR_DICTIONARY_SCALE: 1
+
+OUTPUTS_DIR: /data/users/wangying01/lth/hsmot/workdir/motip_99/joint_10lrconv_distill_exp2
+
+DETR_PRETRAIN: /data/users/wangying01/lth/hsmot/workdir/motip_99/pretrain_10lrconv_distill_exp2/checkpoint_19.pth

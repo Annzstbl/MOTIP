@@ -106,7 +106,8 @@ def train(config: dict, logger: Logger):
             optimizer=optimizer, epoch=epoch, states=train_states,
             clip_max_norm=config["CLIP_MAX_NORM"], detr_num_train_frames=config["DETR_NUM_TRAIN_FRAMES"],
             detr_checkpoint_frames=config["DETR_CHECKPOINT_FRAMES"],
-            lr_warmup_epochs=0 if "LR_WARMUP_EPOCHS" not in config else config["LR_WARMUP_EPOCHS"]
+            lr_warmup_epochs=0 if "LR_WARMUP_EPOCHS" not in config else config["LR_WARMUP_EPOCHS"],
+            save_debug_dir=config["SAVE_DEBUG_DIR"] if "SAVE_DEBUG_DIR" in config else None,
         )
         lr = optimizer.state_dict()["param_groups"][-1]["lr"]
         train_metrics["learning_rate"].update(lr)
