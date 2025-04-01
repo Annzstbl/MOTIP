@@ -138,6 +138,7 @@ class Value:
 
     def fmt(self, fmt):
         return fmt.format(
+            newest=self.value_sync[-1],
             median=self.median,
             average=self.average,
             global_average=self.global_average

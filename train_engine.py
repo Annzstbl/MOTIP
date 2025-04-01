@@ -107,6 +107,7 @@ def train(config: dict, logger: Logger):
             clip_max_norm=config["CLIP_MAX_NORM"], detr_num_train_frames=config["DETR_NUM_TRAIN_FRAMES"],
             detr_checkpoint_frames=config["DETR_CHECKPOINT_FRAMES"],
             lr_warmup_epochs=0 if "LR_WARMUP_EPOCHS" not in config else config["LR_WARMUP_EPOCHS"],
+            save_debug_img_interval=config["SAVE_DEBUG_IMG_INTERVAL"] if "SAVE_DEBUG_IMG_INTERVAL" in config else 100,
             save_debug_dir=config["SAVE_DEBUG_DIR"] if "SAVE_DEBUG_DIR" in config else None,
         )
         lr = optimizer.state_dict()["param_groups"][-1]["lr"]
@@ -336,7 +337,10 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
 
                     box_results = box_results[match[0]]
                     gts = gts[match[1]]
-                    box_confs = box_confs[match[0]]
+                    from hsmot.loss.loss import loss_rotated_iou_norm_bboxes1
+                    ious = loss_rotated_iou_norm_bboxes1(detr_pred_boxes[match[0]].cuda(), gts.cuda(), __info['img_shape']).detach().cpu()
+                    box_confs = ious
+                    # box_confs = box_confs[match[0]]
 
                     _results = {
                         'img': __img.permute(1,2,0).detach().cpu().numpy(),
@@ -417,13 +421,13 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
             logger.print_metrics(
                 metrics=metrics,
                 prompt=f"[Epoch: {epoch}] [{i}/{len(dataloader)}] [tps: {tps.average:.2f}s] [eta: {TPS.format(eta)}] [tps_data: {tps_data.average:.2f}s] ",
-                fmt="{average:.6f} ({global_average:.4f})"
+                fmt="{newest:.6f}[{average:.6f}]({global_average:.4f})"
             )
             logger.save_metrics(
                 metrics=metrics,
                 prompt=f"[Epoch: {epoch}] [{i}/{len(dataloader)}] [tps: {tps.average:.2f}s] [tps_data: {tps_data.average:.2f}s] ",
                 global_step=states["global_iter"],
-                fmt="{average:.6f} ({global_average:.4f})"
+                fmt="{newest:.6f}[{average:.6f}]({global_average:.4f})"
             )
 
         states["global_iter"] += 1
