@@ -16,6 +16,9 @@ from utils.utils import is_distributed, distributed_rank, yaml_to_dict, \
     distributed_world_size, is_main_process, distributed_world_rank
 from submit_engine import submit_one_seq, get_seq_names
 import sys
+from hsmot.eval.validator import PredictValidator, val_folder
+
+
 
 def evaluate(config: dict, logger: Logger):
     """
@@ -114,33 +117,39 @@ def evaluate_one_epoch(config: dict, model: nn.Module,
         torch.distributed.barrier()
 
     if is_main_process():
-        current_file_dir = os.path.dirname(os.path.abspath(__file__))
-        os_flag = os.system(
-            f"{sys.executable} {current_file_dir}/../TrackEval/scripts/run_hsmot_8ch.py " 
-            f"--USE_PARALLEL False "
-            f"--METRICS HOTA CLEAR Identity " 
-            f"--GT_FOLDER {gt_dir} "
-            f"--TRACKERS_FOLDER {tracker_dir} "
-            f"--TRACKERS_TO_EVAL {trackers_name} "
-            f"--TRACKER_SUB_FOLDER {trackers_subfolder} "
-            f"--IMG_FOLDER {img_dir} "
-        )
-        assert os_flag == 0, "TrackEval failed to run."
+        if only_detr:
+            val_lines = val_folder(gt_folder=gt_dir, pred_folder=os.path.join(tracker_dir, trackers_name, trackers_subfolder))
+            logger.save_log_to_file('\n'.join(val_lines))
+
+        else:
+            current_file_dir = os.path.dirname(os.path.abspath(__file__))
+            os_flag = os.system(
+                f"{sys.executable} {current_file_dir}/../TrackEval/scripts/run_hsmot_8ch.py " 
+                f"--USE_PARALLEL False "
+                f"--METRICS HOTA CLEAR Identity " 
+                f"--GT_FOLDER {gt_dir} "
+                f"--TRACKERS_FOLDER {tracker_dir} "
+                f"--TRACKERS_TO_EVAL {trackers_name} "
+                f"--TRACKER_SUB_FOLDER {trackers_subfolder} "
+                f"--IMG_FOLDER {img_dir} "
+            )
+            assert os_flag == 0, "TrackEval failed to run."
 
     if is_distributed():
         torch.distributed.barrier()
-    # Get eval Metrics:
-    eval_metric_path = os.path.join(tracker_dir, trackers_name, 'eval', "cls_comb_det_av_summary.txt")
-    eval_metrics_dict = get_eval_metrics_dict(metric_path=eval_metric_path)
-    metrics["HOTA"].update(eval_metrics_dict["HOTA"])
-    metrics["DetA"].update(eval_metrics_dict["DetA"])
-    metrics["AssA"].update(eval_metrics_dict["AssA"])
-    metrics["DetPr"].update(eval_metrics_dict["DetPr"])
-    metrics["DetRe"].update(eval_metrics_dict["DetRe"])
-    metrics["AssPr"].update(eval_metrics_dict["AssPr"])
-    metrics["AssRe"].update(eval_metrics_dict["AssRe"])
-    metrics["MOTA"].update(eval_metrics_dict["MOTA"])
-    metrics["IDF1"].update(eval_metrics_dict["IDF1"])
+    if not only_detr:
+        # Get eval Metrics:
+        eval_metric_path = os.path.join(tracker_dir, trackers_name, 'eval', "cls_comb_det_av_summary.txt")
+        eval_metrics_dict = get_eval_metrics_dict(metric_path=eval_metric_path)
+        metrics["HOTA"].update(eval_metrics_dict["HOTA"])
+        metrics["DetA"].update(eval_metrics_dict["DetA"])
+        metrics["AssA"].update(eval_metrics_dict["AssA"])
+        metrics["DetPr"].update(eval_metrics_dict["DetPr"])
+        metrics["DetRe"].update(eval_metrics_dict["DetRe"])
+        metrics["AssPr"].update(eval_metrics_dict["AssPr"])
+        metrics["AssRe"].update(eval_metrics_dict["AssRe"])
+        metrics["MOTA"].update(eval_metrics_dict["MOTA"])
+        metrics["IDF1"].update(eval_metrics_dict["IDF1"])
 
     return metrics
 

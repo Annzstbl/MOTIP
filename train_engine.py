@@ -131,7 +131,7 @@ def train(config: dict, logger: Logger):
         )
 
         # Save checkpoint.
-        if (epoch + 1) % config["SAVE_CHECKPOINT_PER_EPOCH"] == 0:
+        if (epoch + 1) % config["SAVE_CHECKPOINT_PER_EPOCH"] == 0 or config["EPOCHS"]- epoch < 4:
             save_checkpoint(model=model,
                             path=os.path.join(config["OUTPUTS_DIR"], f"checkpoint_{epoch}.pth"),
                             states=train_states,
