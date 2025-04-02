@@ -20,11 +20,11 @@ LR_DICTIONARY_SCALE: 1
 
 DETR_PRETRAIN: /data/users/wangying01/lth/hsmot/workdir/motip/r50_deformable_detr_coco_8ch_interpolate.pth
 
-NUM_WORKERS: 5
+NUM_WORKERS: 2
 
 # # Eval:
 INFERENCE_ONLY_DETR: True
-SAVE_CHECKPOINT_PER_EPOCH: 1
+SAVE_CHECKPOINT_PER_EPOCH: 5
 
 OUTPUTS_DIR: /data/users/wangying01/lth/hsmot/workdir/motip_99/pretrain_10lrconv_noItPretrain
 SAVE_DEBUG_DIR: /data/users/wangying01/lth/hsmot/workdir/motip_99/pretrain_10lrconv_noItPretrain/debug
