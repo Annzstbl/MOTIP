@@ -123,7 +123,7 @@ def submit_one_seq(
             inference_ensemble: int = 0,
         ):
     os.makedirs(outputs_dir, exist_ok=True)
-    seq_dataset = SeqDataset(seq_dir=seq_dir, dataset=dataset, width=image_max_size)
+    seq_dataset = SeqDataset(seq_dir=seq_dir, dataset=dataset)
     seq_dataloader = DataLoader(seq_dataset, batch_size=1, num_workers=4, shuffle=False)
     # seq_name = seq_dir.split("/")[-1]
     seq_name = os.path.split(seq_dir)[-1]
@@ -147,7 +147,12 @@ def submit_one_seq(
 
     for i, (image, ori_image) in tqdm(enumerate(seq_dataloader), desc=f"Submit seq {seq_name.split('/')[-1]}"):
         ori_h, ori_w = ori_image.shape[1], ori_image.shape[2]
+        img_h, img_w = image.shape[2], image.shape[3]
         frame = tensor_list_to_nested_tensor([image[0]]).to(device)
+        frame_h, frame_w = frame.tensors.shape[2], frame.tensors.shape[3]
+        assert frame_h==img_h, f"frame_h={frame_h} != img_h={img_h}"
+        assert frame_w==img_w, f"frame_w={frame_w} != img_w={img_w}"
+
         detr_outputs = model(frames=frame)
         detr_logits = detr_outputs["pred_logits"]
         detr_scores = torch.max(detr_logits, dim=-1).values.sigmoid()
@@ -165,7 +170,7 @@ def submit_one_seq(
         # De-normalize to target image size:
         # box_results = detr_det_boxes.cpu() * torch.tensor([ori_w, ori_h, ori_w, ori_h])
         # box_results = box_cxcywh_to_xyxy(boxes=box_results)
-        box_results = rotate_norm_boxes_to_boxes(detr_det_boxes.cpu(), (ori_h, ori_w), version='le135')
+        box_results = rotate_norm_boxes_to_boxes(detr_det_boxes.cpu(), (img_h, img_w), version='le135')
         box_results = obb2poly(box_results)
         label_results = detr_det_labels.cpu()
         confs = torch.max(detr_det_logits, dim=-1).values.sigmoid().cpu()

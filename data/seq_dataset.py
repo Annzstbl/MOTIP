@@ -12,7 +12,7 @@ import mmcv
 from hsmot.mmlab.hs_mmdet import to_tensor
 
 class SeqDataset(Dataset):
-    def __init__(self, seq_dir: str, dataset: str, height: int = 900, width: int = 1200):
+    def __init__(self, seq_dir: str, dataset: str, height: int = 900, width: int = 1200, stride=32, scale_size_w=1184):
         """
         Args:
             seq_dir:
@@ -31,6 +31,9 @@ class SeqDataset(Dataset):
         std = [_*255 for _ in std]
         self.mean = np.array(mean, dtype=np.float32)
         self.std = np.array(std, dtype=np.float32)
+        self.stride = stride
+        # self.scale_size_w = scale_size_w
+        # self.scale_size_h = int(height / width * scale_size_w)
         return
 
     @staticmethod
@@ -48,17 +51,11 @@ class SeqDataset(Dataset):
 
     def process_image(self, image):
         #TODO 这里如果需要旋转的话，必须按比例resize
-
         ori_image = image.copy()
-        # h, w = image.shape[:2]
-        # scale = self.image_height / min(h, w)
-        # if max(h, w) * scale > self.image_width:
-        #     scale = self.image_width / max(h, w)
-        # target_h = int(h * scale)
-        # target_w = int(w * scale)
-        # image = cv2.resize(image, (target_w, target_h))
-        # image = F.normalize(F.to_tensor(image), self.mean, self.std)
+        # 首先归一化  然后resize 然后padding
         image = mmcv.imnormalize(image, self.mean, self.std, to_rgb=False)
+        # image = mmcv.imresize(image, (self.scale_size_w, self.scale_size_h))
+        image = mmcv.impad_to_multiple(image, self.stride, pad_val=0)
         image = np.ascontiguousarray(image.transpose(2, 0, 1))
         image = to_tensor(image)
 
