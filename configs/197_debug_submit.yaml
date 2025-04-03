@@ -1,0 +1,32 @@
+SUPER_CONFIG_PATH: /data/users/litianhao/hsmot_code/MOTIP/configs/197_base.yaml
+
+MODE: submit
+
+OUTPUTS_DIR: /data3/litianhao/hsmot/motip/debug
+
+
+# NUM_SPECTRAL_TOKEN: 1
+# SPECTRAL_TOKEN_LOSS_COEF: 2.0
+
+
+# # Train Setting:
+TRAIN_STAGE: only_detr
+EPOCHS: 20
+LR: 2.0e-4
+LR_WARMUP_EPOCHS: 0
+SCHEDULER_MILESTONES: [15]
+SCHEDULER_GAMMA: 0.1
+BATCH_SIZE: 4
+ACCUMULATE_STEPS: 1
+
+SAMPLE_LENGTHS: [1]
+TRAIN_STAGE: only_detr
+BATCH_SIZE: 4
+
+DETR_PRETRAIN: /data/users/litianhao/hsmot_code/workdir/motip_99/pretrain_10lrconv_distill_exp2/checkpoint_19.pth
+# DETR_PRETRAIN: /data/users/litianhao/hsmot_code/workdir/motip/r50_deformable_detr_coco_8ch_interpolate.pth
+SAVE_DEBUG_DIR: /data3/litianhao/hsmot/motip/debug
+SAVE_DEBUG_IMG_INTERVAL: 10
+
+INFERENCE_MODEL: /data3/litianhao/hsmot/motip/pretrain_10lrfconv_noItPretrain/checkpoint_9.pth
+INFERENCE_ONLY_DETR: True
