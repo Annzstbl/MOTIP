@@ -221,6 +221,51 @@ def sigmoid_focal_loss(inputs, targets, num_boxes, alpha: float = 0.25, gamma: f
 
     return loss.mean(1).sum() / num_boxes
 
+def focal_loss(inputs, targets, alpha=0.25, gamma=2.0, reduction='mean'):
+    prob = inputs
+    targets = targets.clamp(min=0, max=1)  # 避免极端情况
+    ce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction="none")
+    p_t = prob * targets + (1 - prob) * (1 - targets)
+    loss = ce_loss * ((1 - p_t) ** gamma)
+
+    if alpha >= 0:
+        alpha_t = alpha * targets + (1 - alpha) * (1 - targets)
+        loss = alpha_t * loss
+
+    return loss.mean(1).sum()
+
+def kl_divergence_loss(pred, target, eps=1e-6, reduction='mean', use_sigmoid=False):
+    """
+    计算 heatmap 之间的 KL 散度损失。
+
+    Args:
+        pred: 预测的 heatmap, 形状 [B, H, W]
+        target: 真实的 heatmap, 形状 [B, H, W]
+        eps: 避免数值问题的小值
+        reduction: 'mean' / 'sum'，默认 'mean'
+
+    Returns:
+        KL 散度损失
+    """
+    if use_sigmoid:
+        pred = pred.sigmoid()
+
+    # 归一化 heatmap，使其变为概率分布
+    pred = pred + eps  # 避免 log(0)
+    target = target + eps  # 避免 log(0)
+
+    pred = pred / pred.sum(dim=[1, 2], keepdim=True)
+    target = target / target.sum(dim=[1, 2], keepdim=True)
+
+    kl_div = target * (torch.log(target) - torch.log(pred))
+    loss = kl_div.sum(dim=[1, 2])  # 在 H, W 维度求和
+
+    if reduction == 'mean':
+        return loss.mean()
+    elif reduction == 'sum':
+        return loss.sum()
+    else:
+        return loss
 
 class PostProcessSegm(nn.Module):
     def __init__(self, threshold=0.5):

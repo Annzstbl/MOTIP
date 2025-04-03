@@ -388,7 +388,7 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
         metrics["bbox_giou"].update(detr_loss_dict["loss_giou"].item())
         metrics["cls_loss"].update(detr_loss_dict["loss_ce"].item())
 
-        if any(["loss_pec" in k for k in detr_loss_dict.keys()]):
+        if any(["loss_spec" in k for k in detr_loss_dict.keys()]):
             for j in range(config['DETR_NUM_FEATURE_LEVELS']):
                 metrics[f"spec_loss_{j}"].update(detr_loss_dict[f"loss_spec_{j}"].item())
 

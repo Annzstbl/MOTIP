@@ -18,18 +18,17 @@ ACCUMULATE_STEPS: 1
 LR_DICTIONARY_NAMES: [backbone.0.body.conv1.weight]
 LR_DICTIONARY_SCALE: 1
 
-# DETR_PRETRAIN: /data/users/wangying01/lth/hsmot/workdir/motip/r50_deformable_detr_coco_8ch_interpolate.pth
-DETR_PRETRAIN:
+DETR_PRETRAIN: /data/users/wangying01/lth/hsmot/workdir/motip/r50_deformable_detr_coco_8ch_interpolate.pth
 
 NUM_WORKERS: 2
 
 # # Eval:
 INFERENCE_ONLY_DETR: True
-SAVE_CHECKPOINT_PER_EPOCH: 1
+SAVE_CHECKPOINT_PER_EPOCH: 5
 
-OUTPUTS_DIR: /data/users/wangying01/lth/hsmot/workdir/motip_99/debug/train_debug
-SAVE_DEBUG_DIR: /data/users/wangying01/lth/hsmot/workdir/motip_99/debug/train_debug
+OUTPUTS_DIR: /data/users/wangying01/lth/hsmot/workdir/motip_99/pretrain_10lrconv_noItPretrain_spectoken
+SAVE_DEBUG_DIR: /data/users/wangying01/lth/hsmot/workdir/motip_99/pretrain_10lrconv_noItPretrain_spectoken/debug
 SAVE_DEBUG_IMG_INTERVAL: 200
 
 NUM_SPECTRAL_TOKEN: 1
-SPECTRAL_TOKEN_LOSS_COEF: 1
+SPECTRAL_TOKEN_LOSS_COEF: 2
