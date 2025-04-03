@@ -454,7 +454,8 @@ class MOTDataset(Dataset):
                 ]),                
                 # 缺少一个颜色预训练
                 MotNormalize(mean=mean, std=std, to_rgb=False),
-                MotPad(size_divisor=32),
+                # MotPad(size_divisor=32),
+                MotPad(size_divisor=64),
                 MotDefaultFormatBundle(),
                 MotCollect(keys=['img', 'gt_bboxes', 'gt_labels', 'gt_trackids']),
                 MmrotateToMotip()

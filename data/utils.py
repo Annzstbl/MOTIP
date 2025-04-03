@@ -2,6 +2,8 @@
 from utils.nested_tensor import NestedTensor, tensor_list_to_nested_tensor
 import torch
 from hsmot.datasets.pipelines.channel import rotate_boxes_to_norm_boxes, version_index_to_str
+import mmcv
+import numpy
 
 def collate_fn(batch):
     collated_batch = {
@@ -30,6 +32,10 @@ def collate_fn(batch):
             meta["img_shape_beforecollate"] = torch.tensor([meta["img_shape"][0], meta["img_shape"][1]])
             meta["img_shape"] = torch.tensor([final_h, final_w])
             info["norm_boxes"] = rotate_boxes_to_norm_boxes(info["boxes"], (final_h, final_w), version_index_to_str(meta["version"]))
+
+            heat_map = torch.zeros((final_h, final_w), dtype=info["heatmap"].dtype, device=info["heatmap"].device)
+            heat_map[:info["heatmap"].shape[0], :info["heatmap"].shape[1]] = info["heatmap"]
+            info["heatmap"] = heat_map
 
     for data in batch:
         collated_batch["infos"].append(data["infos"])

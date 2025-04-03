@@ -26,12 +26,13 @@ from utils.utils import inverse_sigmoid, accuracy, interpolate, is_distributed, 
 from models.deformable_detr.backbone import build_backbone
 from .matcher import build_matcher
 from .segmentation import (DETRsegm, PostProcessPanoptic, PostProcessSegm,
-                           dice_loss, sigmoid_focal_loss)
+                           dice_loss, sigmoid_focal_loss, focal_loss, kl_divergence_loss)
 from .deformable_transformer import build_deforamble_transformer
 import copy
 
 from hsmot.loss.loss import l1_loss_rotate, loss_rotated_iou_norm_bboxes1
 from hsmot.util.dist import box_iou_rotated_norm_bboxes1
+import einops
 
 def _get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
@@ -249,14 +250,34 @@ class SetCriterion(nn.Module):
 
     def loss_heatmaps(self, outputs, targets, _, __, ):
         #TODO
-        src_heatmap = outputs['spec_heat'] # is a list
-        tgt_heatmap = targets['spec_heat'] if 'spec_heat' in targets else None
+        src_heatmap = outputs['spec_heat'] # 是一个列表，每个元素是一个lvl的spec_heat 尺寸应该是[bs*t, h_lvl, w_lvl, n_spec]
+        tgt_heatmap = torch.stack([target['heatmap'] for target in targets], axis=0) # [bs*t, ori_h, ori_l]
+        num_boxes = tgt_heatmap.sum()
+
+        src_levels = len(src_heatmap)  # 计算有多少个金字塔层级
+        n_spec = src_heatmap[0].shape[-1]  # 每个金字塔层级的spec_heatmap的数量
+        bs_t, ori_h, ori_w = tgt_heatmap.shape  # 原始图像大小
+
+        strides = [ori_h // src.shape[1] for src in src_heatmap]  # 每层 stride
+        assert all(ori_h % s == 0 and ori_w % s == 0 for s in strides), "原图尺寸应能整除 stride"
 
         loss_heatmap = {}
-        for i in range(len(src_heatmap)):
-            # just for debug
-            tgt_heatmap = torch.zeros(src_heatmap[i].shape, device=src_heatmap[i].device)
-            loss_heatmap[f'loss_spec_{i}'] = F.mse_loss(src_heatmap[i], tgt_heatmap)
+        for lvl, src in enumerate(src_heatmap):
+            stride = strides[lvl]
+            tgt_resized = F.avg_pool2d(tgt_heatmap.unsqueeze(1), kernel_size=stride, stride=stride).squeeze(1) * stride * stride # [bs*t, h_lvl, w_lvl]
+            # 除以各通道最大值以归一化
+            tgt_resized_norm = tgt_resized / tgt_resized.amax(dim=(1,2),keepdim=True) # [bs*t, h_lvl, w_lvl]
+            src = einops.rearrange(src, 'b h w s-> (b s) h w ')
+            # loss = kl_divergence_loss(src, tgt_resized.repeat(n_spec, 1, 1), use_sigmoid=True)
+            src=src.sigmoid()
+            loss = F.mse_loss(src, tgt_resized_norm.repeat(n_spec, 1, 1)) # [bs*t, h_lvl, w_lvl]
+
+            loss_heatmap[f'loss_spec_{lvl}'] = loss
+
+        # for i in range(len(src_heatmap)):
+        #     # just for debug
+        #     tgt_heatmap = torch.zeros(src_heatmap[i].shape, device=src_heatmap[i].device)
+        #     loss_heatmap[f'loss_spec_{i}'] = F.mse_loss(src_heatmap[i], tgt_heatmap)
         
         return loss_heatmap
 
@@ -507,6 +528,7 @@ def build(args):
         aux_loss=args.aux_loss,
         with_box_refine=args.with_box_refine,
         two_stage=args.two_stage,
+        num_spectral_token=args.num_spectral_token,
     )
     if args.masks:
         model = DETRsegm(model, freeze_detr=(args.frozen_weights is not None))
@@ -529,7 +551,7 @@ def build(args):
     if args.masks:
         losses += ["masks"]
 
-    if args.num_spectral_token>0: #不计算aux_loss
+    if args.num_spectral_token > 0: #不计算aux_loss
         losses += ["spec_heat"]
         for i in range(args.num_feature_levels):
             weight_dict[f'loss_spec_{i}'] = args.spectral_token_loss_coef

@@ -139,5 +139,5 @@ def load_detr_pretrain(model: nn.Module, pretrain_path: str, num_classes: int):
         if v.shape != model_state_dict[k].shape:
             print(f"Skip loading parameter {k}, required shape {model_state_dict[k].shape}, loaded shape {v.shape}.")
             
-    model.load_state_dict(state_dict=detr_state_dict, strict=True)
+    model.load_state_dict(state_dict=detr_state_dict, strict=False)
     return

@@ -156,7 +156,7 @@ class DeformableTransformer(nn.Module):
         mask_flatten = torch.cat(mask_flatten, 1)
         lvl_pos_embed_flatten = torch.cat(lvl_pos_embed_flatten, 1)
         if spec_token is not None:
-            lvl_embed_spec = torch.stack(lvl_embed_spec, 0).unsqueeze(1).repeat(1, spec_token.shape[2], 1)
+            lvl_embed_spec = torch.stack(lvl_embed_spec, 0).unsqueeze(1).unsqueeze(0).repeat(bs, 1, spec_token.shape[1], 1)
             spec_token = spec_token.unsqueeze(0).repeat(bs, 1, 1, 1)
 
         spatial_shapes = torch.as_tensor(spatial_shapes, dtype=torch.long, device=src_flatten.device)
@@ -249,7 +249,7 @@ class DeformableTransformerEncoderLayer(nn.Module):
         # ffn
         src = self.forward_ffn(src)
 
-        if spec_token:
+        if spec_token is not None:
             spec_token = self.norm1(spec_token)
             spec_token = self.forward_ffn(spec_token)
 
@@ -449,6 +449,7 @@ def build_deforamble_transformer(args):
         dec_n_points=args.dec_n_points,
         enc_n_points=args.enc_n_points,
         two_stage=args.two_stage,
-        two_stage_num_proposals=args.num_queries)
+        two_stage_num_proposals=args.num_queries,
+        use_spectoken=args.num_spectral_token>0)
 
 
