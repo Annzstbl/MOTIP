@@ -232,7 +232,7 @@ class SetCriterion(nn.Module):
         1) we compute hungarian assignment between ground truth boxes and the outputs of the model
         2) we supervise each pair of matched ground-truth / prediction (supervise class and box)
     """
-    def __init__(self, num_classes, matcher, weight_dict, losses, focal_alpha=0.25):
+    def __init__(self, num_classes, matcher, weight_dict, losses, focal_alpha=0.25, use_final_indices=False):
         """ Create the criterion.
         Parameters:
             num_classes: number of object categories, omitting the special no-object category
@@ -247,6 +247,7 @@ class SetCriterion(nn.Module):
         self.weight_dict = weight_dict
         self.losses = losses
         self.focal_alpha = focal_alpha
+        self.use_final_indices = use_final_indices
 
     def loss_heatmaps(self, outputs, targets, _, __, ):
         #TODO
@@ -425,7 +426,8 @@ class SetCriterion(nn.Module):
         # In case of auxiliary losses, we repeat this process with the output of each intermediate layer.
         if 'aux_outputs' in outputs:
             for i, aux_outputs in enumerate(outputs['aux_outputs']):
-                indices = self.matcher(aux_outputs, targets, img_metas)
+                if not self.use_final_indices:
+                    indices = self.matcher(aux_outputs, targets, img_metas)
                 for loss in self.losses:
                     if loss == 'masks' or loss == 'spec_heat':
                         # Intermediate masks losses are too costly to compute, we ignore them.
@@ -557,7 +559,7 @@ def build(args):
             weight_dict[f'loss_spec_{i}'] = args.spectral_token_loss_coef
 
     # num_classes, matcher, weight_dict, losses, focal_alpha=0.25
-    criterion = SetCriterion(num_classes, matcher, weight_dict, losses, focal_alpha=args.focal_alpha)
+    criterion = SetCriterion(num_classes, matcher, weight_dict, losses, focal_alpha=args.focal_alpha, use_final_indices=args.use_final_indices)
     criterion.to(device)
     postprocessors = {'bbox': PostProcess()}
     if args.masks:

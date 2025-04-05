@@ -177,6 +177,9 @@ def main(config: dict):
     if "NUM_SPECTRAL_TOKEN" not in config:
         config['NUM_SPECTRAL_TOKEN'] = 0
 
+    if "USE_FINAL_INDICES" not in config:
+        config["USE_FINAL_INDICES"] = False
+
     if config["MODE"] == "train":
         train(config=config, logger=logger)
     elif config["MODE"] == "eval":

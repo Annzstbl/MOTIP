@@ -62,6 +62,7 @@ class MOTIP(nn.Module):
         self.num_spectral_token = config["NUM_SPECTRAL_TOKEN"]
         if self.num_spectral_token > 0:
             self.spectral_token_loss_coef = config["SPECTRAL_TOKEN_LOSS_COEF"]
+        self.use_final_indices = config["USE_FINAL_INDICES"]
 
         # Prepare args for detr
         detr_args = Args()
@@ -99,6 +100,9 @@ class MOTIP(nn.Module):
         detr_args.num_spectral_token = self.num_spectral_token
         if detr_args.num_spectral_token > 0:
             detr_args.spectral_token_loss_coef = self.spectral_token_loss_coef
+
+        # 匹配
+        detr_args.use_final_indices = self.use_final_indices
 
 
         if self.detr_framework == "Deformable-DETR":

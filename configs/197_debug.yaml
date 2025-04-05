@@ -22,7 +22,9 @@ SAMPLE_LENGTHS: [1]
 TRAIN_STAGE: only_detr
 BATCH_SIZE: 4
 
-DETR_PRETRAIN: /data/users/litianhao/hsmot_code/workdir/motip_99/pretrain_10lrconv_distill_exp2/checkpoint_19.pth
+DETR_PRETRAIN: 
+# DETR_PRETRAIN: /data/users/litianhao/hsmot_code/workdir/motip_99/pretrain_10lrconv_distill_exp2/checkpoint_19.pth
 # DETR_PRETRAIN: /data/users/litianhao/hsmot_code/workdir/motip/r50_deformable_detr_coco_8ch_interpolate.pth
 SAVE_DEBUG_DIR: /data3/litianhao/hsmot/motip/debug
 SAVE_DEBUG_IMG_INTERVAL: 10
+USE_FINAL_INDICES: True
