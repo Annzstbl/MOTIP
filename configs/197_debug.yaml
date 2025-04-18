@@ -15,16 +15,15 @@ LR: 2.0e-4
 LR_WARMUP_EPOCHS: 0
 SCHEDULER_MILESTONES: [15]
 SCHEDULER_GAMMA: 0.1
-BATCH_SIZE: 4
 ACCUMULATE_STEPS: 1
 
 SAMPLE_LENGTHS: [1]
 TRAIN_STAGE: only_detr
-BATCH_SIZE: 4
+BATCH_SIZE: 2
 
-DETR_PRETRAIN: 
+# DETR_PRETRAIN: 
 # DETR_PRETRAIN: /data/users/litianhao/hsmot_code/workdir/motip_99/pretrain_10lrconv_distill_exp2/checkpoint_19.pth
-# DETR_PRETRAIN: /data/users/litianhao/hsmot_code/workdir/motip/r50_deformable_detr_coco_8ch_interpolate.pth
+DETR_PRETRAIN: /data/users/litianhao/hsmot_code/workdir/motip/r50_deformable_detr_coco_8ch_interpolate.pth
 SAVE_DEBUG_DIR: /data3/litianhao/hsmot/motip/debug
 SAVE_DEBUG_IMG_INTERVAL: 10
-USE_FINAL_INDICES: True
+USE_FINAL_INDICES: False

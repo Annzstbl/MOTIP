@@ -19,6 +19,7 @@ from torch.nn.init import xavier_uniform_, constant_, uniform_, normal_
 from utils.utils import inverse_sigmoid
 from models.ops.modules import MSDeformAttn
 from models.ops.modules import MSDeformAttn_Spec
+from models.ops.modules import MSDeformAttn_Rotate
 
 
 class DeformableTransformer(nn.Module):
@@ -161,7 +162,7 @@ class DeformableTransformer(nn.Module):
 
         spatial_shapes = torch.as_tensor(spatial_shapes, dtype=torch.long, device=src_flatten.device)
         level_start_index = torch.cat((spatial_shapes.new_zeros((1, )), spatial_shapes.prod(1).cumsum(0)[:-1]))
-        valid_ratios = torch.stack([self.get_valid_ratio(m) for m in masks], 1)
+        valid_ratios = torch.stack([self.get_valid_ratio(m) for m in masks], 1)# [B, lvl, 2]
 
         # encoder
         memory, memory_spec = self.encoder(src_flatten, spatial_shapes, level_start_index, valid_ratios, lvl_pos_embed_flatten, mask_flatten, spec_token, lvl_embed_spec)
@@ -210,12 +211,14 @@ class DeformableTransformerEncoderLayer(nn.Module):
     def __init__(self,
                  d_model=256, d_ffn=1024,
                  dropout=0.1, activation="relu",
-                 n_levels=4, n_heads=8, n_points=4, use_spectoken=False):
+                 n_levels=4, n_heads=8, n_points=4, use_spectoken=False, use_rotate_attn=False):
         super().__init__()
 
         if use_spectoken:
         # self attention
             self.self_attn = MSDeformAttn_Spec(d_model, n_levels, n_heads, n_points)
+        elif use_rotate_attn:
+            self.self_attn = MSDeformAttn_Rotate(d_model, n_levels, n_heads, n_points)
         else:
             self.self_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
         self.dropout1 = nn.Dropout(dropout)
@@ -319,11 +322,15 @@ class DeformableTransformerEncoder(nn.Module):
 class DeformableTransformerDecoderLayer(nn.Module):
     def __init__(self, d_model=256, d_ffn=1024,
                  dropout=0.1, activation="relu",
-                 n_levels=4, n_heads=8, n_points=4):
+                 n_levels=4, n_heads=8, n_points=4, use_rotate_attn=False):
         super().__init__()
 
+        self.use_rotate_attn = use_rotate_attn
         # cross attention
-        self.cross_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
+        if use_rotate_attn:
+            self.cross_attn = MSDeformAttn_Rotate(d_model, n_levels, n_heads, n_points)
+        else:
+            self.cross_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
 
@@ -357,6 +364,9 @@ class DeformableTransformerDecoderLayer(nn.Module):
         tgt = tgt + self.dropout2(tgt2)
         tgt = self.norm2(tgt)
 
+        if not self.use_rotate_attn:
+            reference_points = reference_points[:,:, :, :4]# [B, num_queries, lvl , 4]
+
         # cross attention
         tgt2 = self.cross_attn(self.with_pos_embed(tgt, query_pos),
                                reference_points,
@@ -388,9 +398,8 @@ class DeformableTransformerDecoder(nn.Module):
         intermediate_reference_points = []
         for lid, layer in enumerate(self.layers):
             if reference_points.shape[-1] == 5:
-                reference_points_input = reference_points[:, :, :4]
-                reference_points_input = reference_points_input[:, :, None] \
-                                         * torch.cat([src_valid_ratios, src_valid_ratios], -1)[:, None]
+                reference_points_input = reference_points[:, :, None] \
+                    * torch.cat([src_valid_ratios, src_valid_ratios,torch.ones((*src_valid_ratios.shape[:-1], 1), device=src_valid_ratios.device)], -1)[:, None]
             else:
                 assert reference_points.shape[-1] == 2
                 reference_points_input = reference_points[:, :, None] * src_valid_ratios[:, None]
