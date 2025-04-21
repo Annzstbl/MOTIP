@@ -325,6 +325,9 @@ def train_one_epoch(config: dict, model: MOTIP, logger: Logger,
                     __info['filename'] = 'debug.npy'
                     mean = __info['transform_metas'].data['img_norm_cfg']['mean']
                     std = __info['transform_metas'].data['img_norm_cfg']['std']
+                    if __img.shape[0] == 3:
+                        mean = mean[[1,2,4]]
+                        std = std[[1,2,4]]
                     motshow = MotShow(save_path=save_debug_dir, mean =mean, std = std, to_bgr=False, show_proposals=True )
 
                     detr_pred_boxes = detr_outputs['pred_boxes'][b*T+t].detach().cpu()

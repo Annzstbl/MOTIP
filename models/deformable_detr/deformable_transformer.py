@@ -211,7 +211,7 @@ class DeformableTransformerEncoderLayer(nn.Module):
     def __init__(self,
                  d_model=256, d_ffn=1024,
                  dropout=0.1, activation="relu",
-                 n_levels=4, n_heads=8, n_points=4, use_spectoken=False, use_rotate_attn=False):
+                 n_levels=4, n_heads=8, n_points=4, use_spectoken=False, use_rotate_attn=True):
         super().__init__()
 
         if use_spectoken:
@@ -322,7 +322,7 @@ class DeformableTransformerEncoder(nn.Module):
 class DeformableTransformerDecoderLayer(nn.Module):
     def __init__(self, d_model=256, d_ffn=1024,
                  dropout=0.1, activation="relu",
-                 n_levels=4, n_heads=8, n_points=4, use_rotate_attn=False):
+                 n_levels=4, n_heads=8, n_points=4, use_rotate_attn=True):
         super().__init__()
 
         self.use_rotate_attn = use_rotate_attn

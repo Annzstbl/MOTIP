@@ -89,6 +89,7 @@ def evaluate_one_epoch(config: dict, model: nn.Module,
                 area_thresh=config["AREA_THRESH"], id_thresh=config["ID_THRESH"],
                 image_max_size=config["INFERENCE_MAX_SIZE"] if "INFERENCE_MAX_SIZE" in config else 1333,
                 inference_ensemble=config["INFERENCE_ENSEMBLE"] if "INFERENCE_ENSEMBLE" in config else 0,
+                npy2rgb=config["NPY2RGB"]
             )
     else:
         submit_one_seq(
@@ -102,6 +103,7 @@ def evaluate_one_epoch(config: dict, model: nn.Module,
             image_max_size=config["INFERENCE_MAX_SIZE"] if "INFERENCE_MAX_SIZE" in config else 1333,
             fake_submit=True,
             inference_ensemble=config["INFERENCE_ENSEMBLE"] if "INFERENCE_ENSEMBLE" in config else 0,
+            npy2rgb=config["NPY2RGB"]
         )
 
     tracker_dir = os.path.join(outputs_dir, '..', '..')

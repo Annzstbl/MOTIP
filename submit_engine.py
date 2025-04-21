@@ -121,9 +121,10 @@ def submit_one_seq(
             image_max_size: int = 1333,
             fake_submit: bool = False,
             inference_ensemble: int = 0,
+            npy2rgb: bool = False,
         ):
     os.makedirs(outputs_dir, exist_ok=True)
-    seq_dataset = SeqDataset(seq_dir=seq_dir, dataset=dataset)
+    seq_dataset = SeqDataset(seq_dir=seq_dir, dataset=dataset, npy2rgb=npy2rgb,)
     seq_dataloader = DataLoader(seq_dataset, batch_size=1, num_workers=4, shuffle=False)
     # seq_name = seq_dir.split("/")[-1]
     seq_name = os.path.split(seq_dir)[-1]

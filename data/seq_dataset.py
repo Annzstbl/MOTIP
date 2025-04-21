@@ -12,7 +12,7 @@ import mmcv
 from hsmot.mmlab.hs_mmdet import to_tensor
 
 class SeqDataset(Dataset):
-    def __init__(self, seq_dir: str, dataset: str, height: int = 900, width: int = 1200, stride=32, scale_size_w=1184):
+    def __init__(self, seq_dir: str, dataset: str, height: int = 900, width: int = 1200, stride=32, scale_size_w=1184, npy2rgb=False):
         """
         Args:
             seq_dir:
@@ -32,6 +32,7 @@ class SeqDataset(Dataset):
         self.mean = np.array(mean, dtype=np.float32)
         self.std = np.array(std, dtype=np.float32)
         self.stride = stride
+        self.npy2rgb = npy2rgb
         # self.scale_size_w = scale_size_w
         # self.scale_size_h = int(height / width * scale_size_w)
         return
@@ -58,6 +59,9 @@ class SeqDataset(Dataset):
         image = mmcv.impad_to_multiple(image, self.stride, pad_val=0)
         image = np.ascontiguousarray(image.transpose(2, 0, 1))
         image = to_tensor(image)
+
+        if self.npy2rgb:
+            image = image[[1,2,4], :, :]
 
         # image = image.unsqueeze(0)
         return image, ori_image

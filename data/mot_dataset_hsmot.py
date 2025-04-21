@@ -54,6 +54,9 @@ class MOTDataset(Dataset):
             + self.sample_intervals[-1:] * (steps_len - len(self.sample_intervals))
         assert len(self.sample_steps) == len(self.sample_lengths) \
                == len(self.sample_modes) == len(self.sample_intervals), f"Sampling setting varies in length."
+        
+        self.npy2rgb = config["NPY2RGB"]
+
         # Current setting:
         self.sample_length = None
         self.sample_mode = None
@@ -103,8 +106,12 @@ class MOTDataset(Dataset):
         assert self.transforms != None
         results = self.transforms['video'](data_info)
         assert all([len(info["boxes"]) > 0 for info in results[1]])
+
+        if self.npy2rgb:
+            imgs = [img[[1,2,4],:,:] for img in results[0]]
+
         return {
-            "images": results[0],
+            "images": results[0] if not self.npy2rgb else imgs,
             "infos": results[1],
             "img_metas": results[2]
         }
