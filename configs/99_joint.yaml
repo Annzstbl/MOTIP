@@ -137,3 +137,4 @@ ROTATE_VERSION: le135
 
 # Multispectra Parameters
 INPUT_CHANNELS: 8
+NPY2RGB: False

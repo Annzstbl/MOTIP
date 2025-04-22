@@ -59,8 +59,9 @@ class DeformableDETR(nn.Module):
         self.transformer = transformer
         hidden_dim = transformer.d_model
         self.class_embed = nn.Linear(hidden_dim, num_classes)
-        # self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
-        self.bbox_embed = MLP(hidden_dim, hidden_dim, 5, 3)# 为了旋转框
+        self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
+        self.angle_embed = MLP(hidden_dim, hidden_dim, 1, 3)
+
         self.num_feature_levels = num_feature_levels
         self.num_spectral_token = num_spectral_token
         if not two_stage:
@@ -108,6 +109,9 @@ class DeformableDETR(nn.Module):
         self.class_embed.bias.data = torch.ones(num_classes) * bias_value
         nn.init.constant_(self.bbox_embed.layers[-1].weight.data, 0)
         nn.init.constant_(self.bbox_embed.layers[-1].bias.data, 0)
+        nn.init.constant_(self.angle_embed.layers[-1].weight.data, 0)
+        nn.init.constant_(self.angle_embed.layers[-1].bias.data, 0)
+        
         for proj in self.input_proj:
             nn.init.xavier_uniform_(proj[0].weight, gain=1)
             nn.init.constant_(proj[0].bias, 0)
@@ -117,11 +121,14 @@ class DeformableDETR(nn.Module):
         if with_box_refine:
             self.class_embed = _get_clones(self.class_embed, num_pred)
             self.bbox_embed = _get_clones(self.bbox_embed, num_pred)
+            self.angle_embed = _get_clones(self.angle_embed, num_pred)
             nn.init.constant_(self.bbox_embed[0].layers[-1].bias.data[2:4], -2.0)
-            nn.init.constant_(self.bbox_embed[0].layers[-1].bias.data[4], -math.log(3))
+            nn.init.constant_(self.angle_embed[0].layers[-1].bias.data, -math.log(3))
             # hack implementation for iterative bounding box refinement
             self.transformer.decoder.bbox_embed = self.bbox_embed
+            self.transformer.decoder.angle_embed = self.angle_embed
         else:
+            raise NotImplementedError("with_box_refine must be True")
             nn.init.constant_(self.bbox_embed.layers[-1].bias.data[2:], -2.0)
             self.class_embed = nn.ModuleList([self.class_embed for _ in range(num_pred)])
             self.bbox_embed = nn.ModuleList([self.bbox_embed for _ in range(num_pred)])
@@ -191,7 +198,8 @@ class DeformableDETR(nn.Module):
                 reference = inter_references[lvl - 1]
             reference = inverse_sigmoid(reference)
             outputs_class = self.class_embed[lvl](hs[lvl])
-            tmp = self.bbox_embed[lvl](hs[lvl])
+            tmp = torch.cat((self.bbox_embed[lvl](hs[lvl]), self.angle_embed[lvl](hs[lvl])), dim=-1)
+
             if reference.shape[-1] == 5:
                 tmp += reference
             else:

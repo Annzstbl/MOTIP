@@ -388,6 +388,7 @@ class DeformableTransformerDecoder(nn.Module):
         self.return_intermediate = return_intermediate
         # hack implementation for iterative bounding box refinement and two-stage Deformable DETR
         self.bbox_embed = None
+        self.angle_embed = None
         self.class_embed = None
 
     def forward(self, tgt, reference_points, src, src_spatial_shapes, src_level_start_index, src_valid_ratios,
@@ -407,7 +408,11 @@ class DeformableTransformerDecoder(nn.Module):
 
             # hack implementation for iterative bounding box refinement
             if self.bbox_embed is not None:
+                assert self.angle_embed is not None
                 tmp = self.bbox_embed[lid](output)
+                angle = self.angle_embed[lid](output)
+                tmp = torch.cat((tmp, angle), -1)
+            
                 if reference_points.shape[-1] == 5:
                     new_reference_points = tmp + inverse_sigmoid(reference_points)
                     new_reference_points = new_reference_points.sigmoid()
