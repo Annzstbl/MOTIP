@@ -1,6 +1,6 @@
 SUPER_CONFIG_PATH: /data/users/litianhao/hsmot_code/MOTIP/configs/197_base.yaml
 
-OUTPUTS_DIR: /data/users/litianhao/hsmot_code/workdir/motip/0420/pretrain_10lrfconv_60epochs_2gpus
+OUTPUTS_DIR: /data/users/litianhao/hsmot_code/workdir/motip/0509/pretrain_10lrfconv_60epochs_conv3d_2gpus
 
 SAMPLE_LENGTHS: [1]       # Only sampling one frame for detection
 
@@ -20,7 +20,7 @@ ACCUMULATE_STEPS: 1
 LR_DICTIONARY_NAMES: [backbone.0.body.conv1]
 LR_DICTIONARY_SCALE: 1
 
-DETR_PRETRAIN: /data3/litianhao/hsmot/motr/r50_deformable_detr_plus_iterative_bbox_refinement-checkpoint_8ch_interpolate.pth
+DETR_PRETRAIN: /data/users/litianhao/hsmot_code/workdir/motr/r50_deformable_detr_plus_iterative_bbox_refinement-checkpoint_convhsi.pth
 
 NUM_WORKERS: 2
 
@@ -28,5 +28,5 @@ NUM_WORKERS: 2
 INFERENCE_ONLY_DETR: True
 SAVE_CHECKPOINT_PER_EPOCH: 5
 
-SAVE_DEBUG_DIR: /data/users/litianhao/hsmot_code/workdir/motip/0420/pretrain_10lrfconv_60epochs_2gpus/debug
+SAVE_DEBUG_DIR: /data/users/litianhao/hsmot_code/workdir/motip/0509/pretrain_10lrfconv_60epochs_conv3d_2gpus/debug
 SAVE_DEBUG_IMG_INTERVAL: 100

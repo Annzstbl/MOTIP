@@ -23,6 +23,7 @@ from utils.nested_tensor import NestedTensor
 from utils.utils import is_main_process
 
 from models.deformable_detr.position_encoding import build_position_encoding
+from hsmot.modules.conv import ConvMSI
 
 
 class FrozenBatchNorm2d(torch.nn.Module):
@@ -140,19 +141,33 @@ def build_backbone(args):
     backbone = Backbone(args.backbone, train_backbone, return_interm_layers, args.dilation)
 
     if args.input_channels != 3:
-        # 修改backbone第一个卷积的输入通道数
         conv1_3ch = backbone.body.conv1
-        new_conv = nn.Conv2d(
-            in_channels=args.input_channels,
-            out_channels=conv1_3ch.out_channels,
-            kernel_size=conv1_3ch.kernel_size,
-            stride=conv1_3ch.stride,
-            padding=conv1_3ch.padding,
-            dilation=conv1_3ch.dilation,
-            groups=conv1_3ch.groups,
-            bias=(conv1_3ch.bias is not None)
+        new_conv = ConvMSI(
+            c1=1,
+            c2=conv1_3ch.out_channels,
+            c3=8,
+            k=(3, *conv1_3ch.kernel_size),
+            s=(1, *conv1_3ch.stride),
+            p=(1, *conv1_3ch.padding),
+            groups=conv1_3ch.out_channels,
+            final_bn = False,
+            final_act = False,
+            use_bn_3d= False
         )
         backbone.body.conv1 = new_conv
+        # # 修改backbone第一个卷积的输入通道数
+        # conv1_3ch = backbone.body.conv1
+        # new_conv = nn.Conv2d(
+        #     in_channels=args.input_channels,
+        #     out_channels=conv1_3ch.out_channels,
+        #     kernel_size=conv1_3ch.kernel_size,
+        #     stride=conv1_3ch.stride,
+        #     padding=conv1_3ch.padding,
+        #     dilation=conv1_3ch.dilation,
+        #     groups=conv1_3ch.groups,
+        #     bias=(conv1_3ch.bias is not None)
+        # )
+        # backbone.body.conv1 = new_conv
 
     model = Joiner(backbone, position_embedding)
     return model
